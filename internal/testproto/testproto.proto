@@ -10,9 +10,15 @@ enum TestStatus {
   ACTIVE = 2;
 }
 
+message DeepMsg {
+  string leaf = 1;
+}
+
 message NestedMsg {
   string value = 1;
   int32 count = 2;
+  DeepMsg deep = 3;
+  map<string, string> attrs = 4;
 }
 
 message TestMsg {

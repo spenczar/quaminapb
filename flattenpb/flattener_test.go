@@ -2,231 +2,29 @@ package flattenpb_test
 
 import (
 	"bytes"
-	"math"
 	"testing"
 
 	"github.com/spenczar/quamina-protobuf/flattenpb"
+	"github.com/spenczar/quamina-protobuf/internal/testproto"
 	"github.com/spenczar/quamina-protobuf/internal/testtracker"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
-	"google.golang.org/protobuf/types/descriptorpb"
 	quamina "quamina.net/go/quamina/v2"
 )
 
-// testDesc is the MessageDescriptor for TestMsg, built programmatically so
-// there is no protoc dependency.
+// testDesc is the MessageDescriptor for TestMsg, obtained from the generated type.
 var testDesc protoreflect.MessageDescriptor
 
 func init() {
-	testDesc = buildTestDescriptor()
+	testDesc = (&testproto.TestMsg{}).ProtoReflect().Descriptor()
 }
 
-func buildTestDescriptor() protoreflect.MessageDescriptor {
-	// Types in the file:
-	//   enum  TestStatus { UNKNOWN=0; PENDING=1; ACTIVE=2 }
-	//   message NestedMsg { string value=1; int32 count=2 }
-	//   message TestMsg {
-	//     int32 id=1; string name=2; bool flag=3; float score=4; double ratio=5;
-	//     bytes data=6; TestStatus status=7; NestedMsg nested=8;
-	//     repeated int32 tags=9; repeated NestedMsg items=10;
-	//     map<string,string> labels=11; sint32 signed_val=12; uint64 big=13;
-	//     sfixed32 sf32=14; sfixed64 sf64=15; fixed32 f32=16; fixed64 f64=17;
-	//   }
-
-	opt := func(s string) *string { return proto.String(s) }
-	i32 := func(v int32) *int32 { return proto.Int32(v) }
-
-	typeOf := func(t descriptorpb.FieldDescriptorProto_Type) *descriptorpb.FieldDescriptorProto_Type {
-		return &t
-	}
-	labelOf := func(l descriptorpb.FieldDescriptorProto_Label) *descriptorpb.FieldDescriptorProto_Label {
-		return &l
-	}
-
-	optional := labelOf(descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL)
-	repeated := labelOf(descriptorpb.FieldDescriptorProto_LABEL_REPEATED)
-
-	field := func(name string, num int32, typ descriptorpb.FieldDescriptorProto_Type, label *descriptorpb.FieldDescriptorProto_Label, typeName string) *descriptorpb.FieldDescriptorProto {
-		f := &descriptorpb.FieldDescriptorProto{
-			Name:   opt(name),
-			Number: i32(num),
-			Type:   typeOf(typ),
-			Label:  label,
-		}
-		if typeName != "" {
-			f.TypeName = opt(typeName)
-		}
-		return f
-	}
-
-	fdp := &descriptorpb.FileDescriptorProto{
-		Name:    opt("test.proto"),
-		Syntax:  opt("proto3"),
-		Package: opt("test"),
-
-		EnumType: []*descriptorpb.EnumDescriptorProto{
-			{
-				Name: opt("TestStatus"),
-				Value: []*descriptorpb.EnumValueDescriptorProto{
-					{Name: opt("UNKNOWN"), Number: i32(0)},
-					{Name: opt("PENDING"), Number: i32(1)},
-					{Name: opt("ACTIVE"), Number: i32(2)},
-				},
-			},
-		},
-
-		MessageType: []*descriptorpb.DescriptorProto{
-			{
-				Name: opt("NestedMsg"),
-				Field: []*descriptorpb.FieldDescriptorProto{
-					field("value", 1, descriptorpb.FieldDescriptorProto_TYPE_STRING, optional, ""),
-					field("count", 2, descriptorpb.FieldDescriptorProto_TYPE_INT32, optional, ""),
-				},
-			},
-			{
-				Name: opt("TestMsg"),
-				Field: []*descriptorpb.FieldDescriptorProto{
-					field("id", 1, descriptorpb.FieldDescriptorProto_TYPE_INT32, optional, ""),
-					field("name", 2, descriptorpb.FieldDescriptorProto_TYPE_STRING, optional, ""),
-					field("flag", 3, descriptorpb.FieldDescriptorProto_TYPE_BOOL, optional, ""),
-					field("score", 4, descriptorpb.FieldDescriptorProto_TYPE_FLOAT, optional, ""),
-					field("ratio", 5, descriptorpb.FieldDescriptorProto_TYPE_DOUBLE, optional, ""),
-					field("data", 6, descriptorpb.FieldDescriptorProto_TYPE_BYTES, optional, ""),
-					field("status", 7, descriptorpb.FieldDescriptorProto_TYPE_ENUM, optional, ".test.TestStatus"),
-					field("nested", 8, descriptorpb.FieldDescriptorProto_TYPE_MESSAGE, optional, ".test.NestedMsg"),
-					field("tags", 9, descriptorpb.FieldDescriptorProto_TYPE_INT32, repeated, ""),
-					field("items", 10, descriptorpb.FieldDescriptorProto_TYPE_MESSAGE, repeated, ".test.NestedMsg"),
-					field("labels", 11, descriptorpb.FieldDescriptorProto_TYPE_MESSAGE, repeated, ".test.TestMsg.LabelsEntry"),
-					field("signed_val", 12, descriptorpb.FieldDescriptorProto_TYPE_SINT32, optional, ""),
-					field("big", 13, descriptorpb.FieldDescriptorProto_TYPE_UINT64, optional, ""),
-					field("sf32", 14, descriptorpb.FieldDescriptorProto_TYPE_SFIXED32, optional, ""),
-					field("sf64", 15, descriptorpb.FieldDescriptorProto_TYPE_SFIXED64, optional, ""),
-					field("f32", 16, descriptorpb.FieldDescriptorProto_TYPE_FIXED32, optional, ""),
-					field("f64", 17, descriptorpb.FieldDescriptorProto_TYPE_FIXED64, optional, ""),
-				},
-				NestedType: []*descriptorpb.DescriptorProto{
-					{
-						Name: opt("LabelsEntry"),
-						Field: []*descriptorpb.FieldDescriptorProto{
-							field("key", 1, descriptorpb.FieldDescriptorProto_TYPE_STRING, optional, ""),
-							field("value", 2, descriptorpb.FieldDescriptorProto_TYPE_STRING, optional, ""),
-						},
-						Options: &descriptorpb.MessageOptions{
-							MapEntry: proto.Bool(true),
-						},
-					},
-				},
-			},
-		},
-	}
-
-	fd, err := protodesc.NewFile(fdp, nil)
+func mustMarshal(m proto.Message) []byte {
+	b, err := proto.MarshalOptions{Deterministic: true}.Marshal(m)
 	if err != nil {
-		panic("buildTestDescriptor: " + err.Error())
+		panic("mustMarshal: " + err.Error())
 	}
-	return fd.Messages().ByName("TestMsg")
-}
-
-// ---------------------------------------------------------------------------
-// Wire-building helpers
-// ---------------------------------------------------------------------------
-
-func appendInt32Field(b []byte, num protowire.Number, v int32) []byte {
-	b = protowire.AppendTag(b, num, protowire.VarintType)
-	return protowire.AppendVarint(b, uint64(v))
-}
-
-func appendUint64Field(b []byte, num protowire.Number, v uint64) []byte {
-	b = protowire.AppendTag(b, num, protowire.VarintType)
-	return protowire.AppendVarint(b, v)
-}
-
-func appendBoolField(b []byte, num protowire.Number, v bool) []byte {
-	b = protowire.AppendTag(b, num, protowire.VarintType)
-	if v {
-		return protowire.AppendVarint(b, 1)
-	}
-	return protowire.AppendVarint(b, 0)
-}
-
-func appendStringField(b []byte, num protowire.Number, s string) []byte {
-	b = protowire.AppendTag(b, num, protowire.BytesType)
-	return protowire.AppendString(b, s)
-}
-
-func appendBytesField(b []byte, num protowire.Number, v []byte) []byte {
-	b = protowire.AppendTag(b, num, protowire.BytesType)
-	return protowire.AppendBytes(b, v)
-}
-
-func appendFloat32Field(b []byte, num protowire.Number, v float32) []byte {
-	b = protowire.AppendTag(b, num, protowire.Fixed32Type)
-	return protowire.AppendFixed32(b, math.Float32bits(v))
-}
-
-func appendFloat64Field(b []byte, num protowire.Number, v float64) []byte {
-	b = protowire.AppendTag(b, num, protowire.Fixed64Type)
-	return protowire.AppendFixed64(b, math.Float64bits(v))
-}
-
-func appendEnumField(b []byte, num protowire.Number, v int32) []byte {
-	return appendInt32Field(b, num, v)
-}
-
-func appendSint32Field(b []byte, num protowire.Number, v int32) []byte {
-	b = protowire.AppendTag(b, num, protowire.VarintType)
-	return protowire.AppendVarint(b, protowire.EncodeZigZag(int64(v)))
-}
-
-func appendSfixed32Field(b []byte, num protowire.Number, v int32) []byte {
-	b = protowire.AppendTag(b, num, protowire.Fixed32Type)
-	return protowire.AppendFixed32(b, uint32(v))
-}
-
-func appendSfixed64Field(b []byte, num protowire.Number, v int64) []byte {
-	b = protowire.AppendTag(b, num, protowire.Fixed64Type)
-	return protowire.AppendFixed64(b, uint64(v))
-}
-
-func appendFixed32Field(b []byte, num protowire.Number, v uint32) []byte {
-	b = protowire.AppendTag(b, num, protowire.Fixed32Type)
-	return protowire.AppendFixed32(b, v)
-}
-
-func appendFixed64Field(b []byte, num protowire.Number, v uint64) []byte {
-	b = protowire.AppendTag(b, num, protowire.Fixed64Type)
-	return protowire.AppendFixed64(b, v)
-}
-
-func appendMessageField(b []byte, num protowire.Number, inner []byte) []byte {
-	b = protowire.AppendTag(b, num, protowire.BytesType)
-	return protowire.AppendBytes(b, inner)
-}
-
-func appendPackedInt32s(b []byte, num protowire.Number, vs ...int32) []byte {
-	var packed []byte
-	for _, v := range vs {
-		packed = protowire.AppendVarint(packed, uint64(v))
-	}
-	b = protowire.AppendTag(b, num, protowire.BytesType)
-	return protowire.AppendBytes(b, packed)
-}
-
-// nestedMsg builds a NestedMsg wire encoding (value=field1, count=field2).
-func nestedMsg(value string, count int32) []byte {
-	var b []byte
-	b = appendStringField(b, 1, value)
-	b = appendInt32Field(b, 2, count)
-	return b
-}
-
-// mapEntry builds a LabelsEntry wire encoding.
-func mapEntry(key, value string) []byte {
-	var b []byte
-	b = appendStringField(b, 1, key)
-	b = appendStringField(b, 2, value)
 	return b
 }
 
@@ -287,126 +85,119 @@ func TestScalars(t *testing.T) {
 	runCases(t, []tc{
 		{
 			name:      "int32",
-			data:      appendInt32Field(nil, 1, 42),
+			data:      mustMarshal(&testproto.TestMsg{Id: 42}),
 			paths:     []string{"id"},
 			wantPaths: []string{"id"},
 			wantVals:  []string{"42"},
 		},
 		{
 			name:      "int32 negative",
-			data:      appendInt32Field(nil, 1, -7),
+			data:      mustMarshal(&testproto.TestMsg{Id: -7}),
 			paths:     []string{"id"},
 			wantPaths: []string{"id"},
 			wantVals:  []string{"-7"},
 		},
 		{
 			name:      "string",
-			data:      appendStringField(nil, 2, "hello"),
+			data:      mustMarshal(&testproto.TestMsg{Name: "hello"}),
 			paths:     []string{"name"},
 			wantPaths: []string{"name"},
 			wantVals:  []string{`"hello"`},
 		},
 		{
 			name:      "bool true",
-			data:      appendBoolField(nil, 3, true),
+			data:      mustMarshal(&testproto.TestMsg{Flag: true}),
 			paths:     []string{"flag"},
 			wantPaths: []string{"flag"},
 			wantVals:  []string{"true"},
 		},
 		{
-			name:      "bool false",
-			data:      appendBoolField(nil, 3, false),
-			paths:     []string{"flag"},
-			wantPaths: []string{"flag"},
-			wantVals:  []string{"false"},
-		},
-		{
 			name:      "float32",
-			data:      appendFloat32Field(nil, 4, 3.14),
+			data:      mustMarshal(&testproto.TestMsg{Score: 3.14}),
 			paths:     []string{"score"},
 			wantPaths: []string{"score"},
 			wantVals:  []string{"3.14"},
 		},
 		{
 			name:      "float64",
-			data:      appendFloat64Field(nil, 5, 2.718281828),
+			data:      mustMarshal(&testproto.TestMsg{Ratio: 2.718281828}),
 			paths:     []string{"ratio"},
 			wantPaths: []string{"ratio"},
 			wantVals:  []string{"2.718281828"},
 		},
 		{
 			name:      "bytes",
-			data:      appendBytesField(nil, 6, []byte("abc")),
+			data:      mustMarshal(&testproto.TestMsg{Data: []byte("abc")}),
 			paths:     []string{"data"},
 			wantPaths: []string{"data"},
 			wantVals:  []string{"YWJj"}, // base64("abc")
 		},
 		{
 			name:      "enum known",
-			data:      appendEnumField(nil, 7, 1),
+			data:      mustMarshal(&testproto.TestMsg{Status: testproto.TestStatus_PENDING}),
 			paths:     []string{"status"},
 			wantPaths: []string{"status"},
 			wantVals:  []string{`"PENDING"`},
 		},
 		{
 			name:      "enum unknown value",
-			data:      appendEnumField(nil, 7, 99),
+			data:      mustMarshal(&testproto.TestMsg{Status: testproto.TestStatus(99)}),
 			paths:     []string{"status"},
 			wantPaths: []string{"status"},
 			wantVals:  []string{"99"},
 		},
 		{
 			name:      "sint32 positive",
-			data:      appendSint32Field(nil, 12, 5),
+			data:      mustMarshal(&testproto.TestMsg{SignedVal: 5}),
 			paths:     []string{"signed_val"},
 			wantPaths: []string{"signed_val"},
 			wantVals:  []string{"5"},
 		},
 		{
 			name:      "sint32 negative",
-			data:      appendSint32Field(nil, 12, -3),
+			data:      mustMarshal(&testproto.TestMsg{SignedVal: -3}),
 			paths:     []string{"signed_val"},
 			wantPaths: []string{"signed_val"},
 			wantVals:  []string{"-3"},
 		},
 		{
 			name:      "uint64",
-			data:      appendUint64Field(nil, 13, 1<<40),
+			data:      mustMarshal(&testproto.TestMsg{Big: 1 << 40}),
 			paths:     []string{"big"},
 			wantPaths: []string{"big"},
 			wantVals:  []string{"1099511627776"},
 		},
 		{
 			name:      "sfixed32",
-			data:      appendSfixed32Field(nil, 14, -100),
+			data:      mustMarshal(&testproto.TestMsg{Sf32: -100}),
 			paths:     []string{"sf32"},
 			wantPaths: []string{"sf32"},
 			wantVals:  []string{"-100"},
 		},
 		{
 			name:      "sfixed64",
-			data:      appendSfixed64Field(nil, 15, -999999999999),
+			data:      mustMarshal(&testproto.TestMsg{Sf64: -999999999999}),
 			paths:     []string{"sf64"},
 			wantPaths: []string{"sf64"},
 			wantVals:  []string{"-999999999999"},
 		},
 		{
 			name:      "fixed32",
-			data:      appendFixed32Field(nil, 16, 42),
+			data:      mustMarshal(&testproto.TestMsg{F32: 42}),
 			paths:     []string{"f32"},
 			wantPaths: []string{"f32"},
 			wantVals:  []string{"42"},
 		},
 		{
 			name:      "fixed64",
-			data:      appendFixed64Field(nil, 17, 9999),
+			data:      mustMarshal(&testproto.TestMsg{F64: 9999}),
 			paths:     []string{"f64"},
 			wantPaths: []string{"f64"},
 			wantVals:  []string{"9999"},
 		},
 		{
 			name:      "multiple scalars",
-			data:      func() []byte { b := appendInt32Field(nil, 1, 7); return appendStringField(b, 2, "x") }(),
+			data:      mustMarshal(&testproto.TestMsg{Id: 7, Name: "x"}),
 			paths:     []string{"id", "name"},
 			wantPaths: []string{"id", "name"},
 			wantVals:  []string{"7", `"x"`},
@@ -418,14 +209,14 @@ func TestTrackerPruning(t *testing.T) {
 	runCases(t, []tc{
 		{
 			name:      "field not in tracker is not emitted",
-			data:      func() []byte { b := appendInt32Field(nil, 1, 1); return appendStringField(b, 2, "skip") }(),
+			data:      mustMarshal(&testproto.TestMsg{Id: 1, Name: "skip"}),
 			paths:     []string{"id"}, // only "id" registered
 			wantPaths: []string{"id"},
 			wantVals:  []string{"1"},
 		},
 		{
 			name:      "no fields registered",
-			data:      appendInt32Field(nil, 1, 42),
+			data:      mustMarshal(&testproto.TestMsg{Id: 42}),
 			paths:     []string{"name"}, // unrelated path
 			wantPaths: []string{},
 			wantVals:  []string{},
@@ -434,9 +225,9 @@ func TestTrackerPruning(t *testing.T) {
 }
 
 func TestNestedMessage(t *testing.T) {
-	inner := nestedMsg("world", 99)
-	var msg []byte
-	msg = appendMessageField(msg, 8, inner) // nested = NestedMsg{value:"world", count:99}
+	msg := mustMarshal(&testproto.TestMsg{
+		Nested: &testproto.NestedMsg{Value: "world", Count: 99},
+	})
 
 	runCases(t, []tc{
 		{
@@ -463,9 +254,45 @@ func TestNestedMessage(t *testing.T) {
 	})
 }
 
+func TestTwoLevelNesting(t *testing.T) {
+	msg := mustMarshal(&testproto.TestMsg{
+		Nested: &testproto.NestedMsg{
+			Deep: &testproto.DeepMsg{Leaf: "hello"},
+		},
+	})
+
+	runCases(t, []tc{
+		{
+			name:      "two-level nested leaf",
+			data:      msg,
+			paths:     []string{"nested\ndeep\nleaf"},
+			wantPaths: []string{"nested\ndeep\nleaf"},
+			wantVals:  []string{`"hello"`},
+		},
+	})
+}
+
+func TestMapInNestedMessage(t *testing.T) {
+	msg := mustMarshal(&testproto.TestMsg{
+		Nested: &testproto.NestedMsg{
+			Attrs: map[string]string{"color": "blue"},
+		},
+	})
+
+	runCases(t, []tc{
+		{
+			name:      "map inside nested message",
+			data:      msg,
+			paths:     []string{"nested\nattrs\ncolor"},
+			wantPaths: []string{"nested\nattrs\ncolor"},
+			wantVals:  []string{`"blue"`},
+		},
+	})
+}
+
 func TestRepeatedScalar(t *testing.T) {
-	// tags: [10, 20, 30] — packed encoding
-	packed := appendPackedInt32s(nil, 9, 10, 20, 30)
+	// tags: [10, 20, 30] — packed encoding (proto.Marshal always packs)
+	packed := mustMarshal(&testproto.TestMsg{Tags: []int32{10, 20, 30}})
 
 	runCases(t, []tc{
 		{
@@ -503,10 +330,13 @@ func TestRepeatedScalar(t *testing.T) {
 	})
 
 	// Unpacked repeated fields (same field number appears multiple times).
+	// proto.Marshal always packs, so we build this by hand.
 	unpacked := func() []byte {
 		var b []byte
-		b = appendInt32Field(b, 9, 100)
-		b = appendInt32Field(b, 9, 200)
+		b = protowire.AppendTag(b, 9, protowire.VarintType)
+		b = protowire.AppendVarint(b, 100)
+		b = protowire.AppendTag(b, 9, protowire.VarintType)
+		b = protowire.AppendVarint(b, 200)
 		return b
 	}()
 
@@ -522,9 +352,12 @@ func TestRepeatedScalar(t *testing.T) {
 }
 
 func TestRepeatedMessage(t *testing.T) {
-	var msg []byte
-	msg = appendMessageField(msg, 10, nestedMsg("a", 1)) // items[0]
-	msg = appendMessageField(msg, 10, nestedMsg("b", 2)) // items[1]
+	msg := mustMarshal(&testproto.TestMsg{
+		Items: []*testproto.NestedMsg{
+			{Value: "a", Count: 1},
+			{Value: "b", Count: 2},
+		},
+	})
 
 	runCases(t, []tc{
 		{
@@ -568,9 +401,9 @@ func TestRepeatedMessage(t *testing.T) {
 }
 
 func TestMapField(t *testing.T) {
-	var msg []byte
-	msg = appendMessageField(msg, 11, mapEntry("env", "prod"))
-	msg = appendMessageField(msg, 11, mapEntry("region", "us-east"))
+	msg := mustMarshal(&testproto.TestMsg{
+		Labels: map[string]string{"env": "prod", "region": "us-east"},
+	})
 
 	runCases(t, []tc{
 		{
@@ -607,7 +440,7 @@ func TestErrors(t *testing.T) {
 		},
 		{
 			name:    "truncated varint value",
-			data:    func() []byte { b := protowire.AppendTag(nil, 1, protowire.VarintType); return b }(), // tag with no value
+			data:    func() []byte { return protowire.AppendTag(nil, 1, protowire.VarintType) }(), // tag with no value
 			paths:   []string{"id"},
 			wantErr: true,
 		},
@@ -618,7 +451,7 @@ func TestCopy(t *testing.T) {
 	orig := flattenpb.New(testDesc)
 	cpy := orig.Copy()
 
-	data := appendInt32Field(nil, 1, 7)
+	data := mustMarshal(&testproto.TestMsg{Id: 7})
 	tr := testtracker.New("id")
 
 	f1, err := orig.Flatten(data, tr)
@@ -649,7 +482,7 @@ func TestWithFlattener(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	event := appendInt32Field(nil, 1, 42)
+	event := mustMarshal(&testproto.TestMsg{Id: 42})
 	matches, err := q.MatchesForEvent(event)
 	if err != nil {
 		t.Fatal(err)

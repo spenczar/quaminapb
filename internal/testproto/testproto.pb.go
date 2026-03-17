@@ -70,17 +70,63 @@ func (TestStatus) EnumDescriptor() ([]byte, []int) {
 	return file_testproto_proto_rawDescGZIP(), []int{0}
 }
 
+type DeepMsg struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Leaf          string                 `protobuf:"bytes,1,opt,name=leaf,proto3" json:"leaf,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeepMsg) Reset() {
+	*x = DeepMsg{}
+	mi := &file_testproto_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeepMsg) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeepMsg) ProtoMessage() {}
+
+func (x *DeepMsg) ProtoReflect() protoreflect.Message {
+	mi := &file_testproto_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeepMsg.ProtoReflect.Descriptor instead.
+func (*DeepMsg) Descriptor() ([]byte, []int) {
+	return file_testproto_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *DeepMsg) GetLeaf() string {
+	if x != nil {
+		return x.Leaf
+	}
+	return ""
+}
+
 type NestedMsg struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Value         string                 `protobuf:"bytes,1,opt,name=value,proto3" json:"value,omitempty"`
 	Count         int32                  `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
+	Deep          *DeepMsg               `protobuf:"bytes,3,opt,name=deep,proto3" json:"deep,omitempty"`
+	Attrs         map[string]string      `protobuf:"bytes,4,rep,name=attrs,proto3" json:"attrs,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *NestedMsg) Reset() {
 	*x = NestedMsg{}
-	mi := &file_testproto_proto_msgTypes[0]
+	mi := &file_testproto_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -92,7 +138,7 @@ func (x *NestedMsg) String() string {
 func (*NestedMsg) ProtoMessage() {}
 
 func (x *NestedMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_testproto_proto_msgTypes[0]
+	mi := &file_testproto_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -105,7 +151,7 @@ func (x *NestedMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NestedMsg.ProtoReflect.Descriptor instead.
 func (*NestedMsg) Descriptor() ([]byte, []int) {
-	return file_testproto_proto_rawDescGZIP(), []int{0}
+	return file_testproto_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *NestedMsg) GetValue() string {
@@ -120,6 +166,20 @@ func (x *NestedMsg) GetCount() int32 {
 		return x.Count
 	}
 	return 0
+}
+
+func (x *NestedMsg) GetDeep() *DeepMsg {
+	if x != nil {
+		return x.Deep
+	}
+	return nil
+}
+
+func (x *NestedMsg) GetAttrs() map[string]string {
+	if x != nil {
+		return x.Attrs
+	}
+	return nil
 }
 
 type TestMsg struct {
@@ -147,7 +207,7 @@ type TestMsg struct {
 
 func (x *TestMsg) Reset() {
 	*x = TestMsg{}
-	mi := &file_testproto_proto_msgTypes[1]
+	mi := &file_testproto_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -159,7 +219,7 @@ func (x *TestMsg) String() string {
 func (*TestMsg) ProtoMessage() {}
 
 func (x *TestMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_testproto_proto_msgTypes[1]
+	mi := &file_testproto_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -172,7 +232,7 @@ func (x *TestMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TestMsg.ProtoReflect.Descriptor instead.
 func (*TestMsg) Descriptor() ([]byte, []int) {
-	return file_testproto_proto_rawDescGZIP(), []int{1}
+	return file_testproto_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *TestMsg) GetId() int32 {
@@ -298,10 +358,18 @@ var File_testproto_proto protoreflect.FileDescriptor
 
 const file_testproto_proto_rawDesc = "" +
 	"\n" +
-	"\x0ftestproto.proto\x12\x04test\"7\n" +
+	"\x0ftestproto.proto\x12\x04test\"\x1d\n" +
+	"\aDeepMsg\x12\x12\n" +
+	"\x04leaf\x18\x01 \x01(\tR\x04leaf\"\xc6\x01\n" +
 	"\tNestedMsg\x12\x14\n" +
 	"\x05value\x18\x01 \x01(\tR\x05value\x12\x14\n" +
-	"\x05count\x18\x02 \x01(\x05R\x05count\"\xfa\x03\n" +
+	"\x05count\x18\x02 \x01(\x05R\x05count\x12!\n" +
+	"\x04deep\x18\x03 \x01(\v2\r.test.DeepMsgR\x04deep\x120\n" +
+	"\x05attrs\x18\x04 \x03(\v2\x1a.test.NestedMsg.AttrsEntryR\x05attrs\x1a8\n" +
+	"\n" +
+	"AttrsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xfa\x03\n" +
 	"\aTestMsg\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x05R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -345,23 +413,27 @@ func file_testproto_proto_rawDescGZIP() []byte {
 }
 
 var file_testproto_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_testproto_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_testproto_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_testproto_proto_goTypes = []any{
 	(TestStatus)(0),   // 0: test.TestStatus
-	(*NestedMsg)(nil), // 1: test.NestedMsg
-	(*TestMsg)(nil),   // 2: test.TestMsg
-	nil,               // 3: test.TestMsg.LabelsEntry
+	(*DeepMsg)(nil),   // 1: test.DeepMsg
+	(*NestedMsg)(nil), // 2: test.NestedMsg
+	(*TestMsg)(nil),   // 3: test.TestMsg
+	nil,               // 4: test.NestedMsg.AttrsEntry
+	nil,               // 5: test.TestMsg.LabelsEntry
 }
 var file_testproto_proto_depIdxs = []int32{
-	0, // 0: test.TestMsg.status:type_name -> test.TestStatus
-	1, // 1: test.TestMsg.nested:type_name -> test.NestedMsg
-	1, // 2: test.TestMsg.items:type_name -> test.NestedMsg
-	3, // 3: test.TestMsg.labels:type_name -> test.TestMsg.LabelsEntry
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	1, // 0: test.NestedMsg.deep:type_name -> test.DeepMsg
+	4, // 1: test.NestedMsg.attrs:type_name -> test.NestedMsg.AttrsEntry
+	0, // 2: test.TestMsg.status:type_name -> test.TestStatus
+	2, // 3: test.TestMsg.nested:type_name -> test.NestedMsg
+	2, // 4: test.TestMsg.items:type_name -> test.NestedMsg
+	5, // 5: test.TestMsg.labels:type_name -> test.TestMsg.LabelsEntry
+	6, // [6:6] is the sub-list for method output_type
+	6, // [6:6] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_testproto_proto_init() }
@@ -375,7 +447,7 @@ func file_testproto_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_testproto_proto_rawDesc), len(file_testproto_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   3,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
