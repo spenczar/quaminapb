@@ -135,14 +135,19 @@ func (f *Flattener) flattenMsg(
 	defer func() { f.msgDepth-- }()
 
 	for len(data) > 0 {
-		num, typ, n := protowire.ConsumeTag(data)
+		// Read the raw tag varint. The schema table is keyed by the same
+		// encoded form (protowire.EncodeTag), so we can look up the handler
+		// directly without decoding. DecodeTag is deferred to the skip paths
+		// below, where ConsumeFieldValue needs num and typ.
+		tag, n := protowire.ConsumeVarint(data)
 		if n < 0 {
 			return protowire.ParseError(n)
 		}
 		data = data[n:]
 
-		h, ok := schema.handlers[num]
+		h, ok := schema.handlers[tag]
 		if !ok {
+			num, typ := protowire.DecodeTag(tag)
 			n = protowire.ConsumeFieldValue(num, typ, data)
 			if n < 0 {
 				return protowire.ParseError(n)
@@ -151,6 +156,7 @@ func (f *Flattener) flattenMsg(
 			continue
 		}
 		if !tracker.IsSegmentUsed(h.name) {
+			num, typ := protowire.DecodeTag(tag)
 			n = protowire.ConsumeFieldValue(num, typ, data)
 			if n < 0 {
 				return protowire.ParseError(n)
@@ -159,7 +165,7 @@ func (f *Flattener) flattenMsg(
 			continue
 		}
 		var err error
-		data, err = h.fn(f, data, typ == protowire.BytesType, tracker, arrayTrail, arrays)
+		data, err = h.fn(f, data, tracker, arrayTrail, arrays)
 		if err != nil {
 			return err
 		}

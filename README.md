@@ -38,11 +38,11 @@ Repeated fields and map fields are supported; scalar values are rendered as thei
 
 ## Implementation
 
-Proto wire format encodes fields by number, not by name. To resolve numbers back to names during parsing, `New` walks the descriptor at construction time and builds a per-message-type table mapping each field number to its name (as a pre-allocated `[]byte`) and type metadata. This is done once for the root message and all transitively reachable nested message types, so there's no descriptor traversal at match time.
+Proto wire format encodes fields by number, not by name. `New` walks the descriptor at construction time and compiles a per-message-type dispatch table: for each `(field number, wire type)` pair it builds a pre-baked handler — a closure that contains everything needed to parse and emit that field with no further type inspection. This compilation is done once for the root message and all transitively reachable nested types; the descriptor is never consulted again after construction.
 
-During `Flatten`, each tag is decoded to a field number, looked up in the table to get the field name, and then checked against quamina's `SegmentsTreeTracker` before any value bytes are parsed. If no active pattern cares about that field, the bytes are skipped entirely. This is why performance scales with the number of fields the patterns actually reference, not the total size of the event.
+The hot loop in `Flatten` is therefore very thin: read the raw tag varint, look it up directly in the handler table (the table is keyed by the same encoded form, so no decoding is needed), check quamina's `SegmentsTreeTracker` to see if any active pattern cares about this field, and if so call the handler. If nothing matches — either no handler exists for that tag, or no pattern references the field — the bytes are skipped entirely without parsing the value.
 
-Internal buffers (`fields`, `valBuf`, `arrayPosBuf`) are reset and reused across `Flatten` calls, giving zero allocations in steady state. `Copy()` creates a new `Flattener` with fresh buffers but shares the immutable schema tables with the original.
+Internal buffers (`fields`, `valBuf`, `arrayPosBuf`) are reset and reused across `Flatten` calls, giving zero allocations in steady state. `Copy()` creates a new `Flattener` with fresh buffers but shares the immutable handler tables with the original.
 
 ## Performance
 

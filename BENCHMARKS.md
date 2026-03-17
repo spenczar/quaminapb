@@ -1,6 +1,6 @@
 # Benchmarks
 
-All benchmarks run on an AMD Ryzen 5 7600X, `-benchtime=3s -count=3`.
+All benchmarks run on an AMD Ryzen 5 7600X, `-benchtime=2s -count=2`.
 
 ## Full-pipeline (proto only)
 
@@ -8,10 +8,10 @@ Against a moderately complex message with a mix of scalar, nested, and repeated 
 
 | Benchmark | ns/op | B/op | allocs/op |
 |---|---|---|---|
-| FewFields Hit (2 patterns, event matches) | ~505 | 0 | 0 |
-| FewFields Miss (2 patterns, no match) | ~476 | 0 | 0 |
-| ManyFields Hit (5 patterns, event matches) | ~1055 | 0 | 0 |
-| ManyFields Miss (5 patterns, no match) | ~895 | 0 | 0 |
+| FewFields Hit (2 patterns, event matches) | ~437 | 0 | 0 |
+| FewFields Miss (2 patterns, no match) | ~413 | 0 | 0 |
+| ManyFields Hit (5 patterns, event matches) | ~940 | 0 | 0 |
+| ManyFields Miss (5 patterns, no match) | ~798 | 0 | 0 |
 
 The `FewFields` case reflects typical quamina usage where patterns only care about a small subset of fields — the flattener skips unused paths entirely. Zero allocations in steady state because quamina and the flattener reuse their internal buffers.
 
@@ -24,16 +24,16 @@ Side-by-side comparison of identical logical data encoded as JSON vs proto3 bina
 | Encoding | Hit ns/op | Miss ns/op | Event size |
 |---|---|---|---|
 | JSON | ~341 | ~286 | ~600 bytes |
-| Proto | ~330 | ~274 | ~150 bytes |
+| Proto | ~281 | ~234 | ~150 bytes |
 
 **Status** (9.4 KB Twitter-like event, 3 patterns; miss event is a minimal ~100-byte stub with non-matching values):
 
 | Encoding | Hit ns/op | Miss ns/op | Event size |
 |---|---|---|---|
 | JSON | ~6193 | ~387 | 9.4 KB |
-| Proto | ~1130 | ~326 | ~350 bytes |
+| Proto | ~999 | ~293 | ~350 bytes |
 
-The Status hit benchmark shows the largest difference: proto binary is ~5.5× faster than JSON for a 9.4 KB event because the proto flattener skips irrelevant bytes in the wire encoding without parsing them, while the JSON flattener must scan every character. Miss times converge because quamina can bail out early once a pattern fails, long before the full event is consumed.
+The Status hit benchmark shows the largest difference: proto binary is ~6× faster than JSON for a 9.4 KB event because the proto flattener skips irrelevant bytes in the wire encoding without parsing them, while the JSON flattener must scan every character. Miss times converge because quamina can bail out early once a pattern fails, long before the full event is consumed.
 
 Run benchmarks yourself:
 

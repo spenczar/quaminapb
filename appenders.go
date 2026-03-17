@@ -18,9 +18,13 @@ type appendFixed32Fn func(buf []byte, v uint32) ([]byte, bool)
 // appendFixed64Fn formats a fixed64 wire value into buf.
 type appendFixed64Fn func(buf []byte, v uint64) ([]byte, bool)
 
-func appendBool(buf []byte, v uint64) ([]byte, bool)   { return strconv.AppendBool(buf, v != 0), false }
-func appendInt32(buf []byte, v uint64) ([]byte, bool)  { return strconv.AppendInt(buf, int64(int32(v)), 10), true }
-func appendInt64(buf []byte, v uint64) ([]byte, bool)  { return strconv.AppendInt(buf, int64(v), 10), true }
+func appendBool(buf []byte, v uint64) ([]byte, bool) { return strconv.AppendBool(buf, v != 0), false }
+func appendInt32(buf []byte, v uint64) ([]byte, bool) {
+	return strconv.AppendInt(buf, int64(int32(v)), 10), true
+}
+func appendInt64(buf []byte, v uint64) ([]byte, bool) {
+	return strconv.AppendInt(buf, int64(v), 10), true
+}
 func appendUint64(buf []byte, v uint64) ([]byte, bool) { return strconv.AppendUint(buf, v, 10), true }
 
 func appendSint32(buf []byte, v uint64) ([]byte, bool) {
@@ -35,27 +39,40 @@ func appendFloatVal(buf []byte, v uint32) ([]byte, bool) {
 	return strconv.AppendFloat(buf, float64(math.Float32frombits(v)), 'g', -1, 32), true
 }
 
-func appendFixed32Val(buf []byte, v uint32) ([]byte, bool) { return strconv.AppendUint(buf, uint64(v), 10), true }
-func appendSfixed32(buf []byte, v uint32) ([]byte, bool)   { return strconv.AppendInt(buf, int64(int32(v)), 10), true }
+func appendFixed32Val(buf []byte, v uint32) ([]byte, bool) {
+	return strconv.AppendUint(buf, uint64(v), 10), true
+}
+func appendSfixed32(buf []byte, v uint32) ([]byte, bool) {
+	return strconv.AppendInt(buf, int64(int32(v)), 10), true
+}
 
 func appendDoubleVal(buf []byte, v uint64) ([]byte, bool) {
 	return strconv.AppendFloat(buf, math.Float64frombits(v), 'g', -1, 64), true
 }
 
-func appendFixed64Val(buf []byte, v uint64) ([]byte, bool) { return strconv.AppendUint(buf, v, 10), true }
-func appendSfixed64(buf []byte, v uint64) ([]byte, bool)   { return strconv.AppendInt(buf, int64(v), 10), true }
+func appendFixed64Val(buf []byte, v uint64) ([]byte, bool) {
+	return strconv.AppendUint(buf, v, 10), true
+}
+func appendSfixed64(buf []byte, v uint64) ([]byte, bool) {
+	return strconv.AppendInt(buf, int64(v), 10), true
+}
 
 // makeEnumAppendFn returns an appendVarintFn that resolves enum value names.
 func makeEnumAppendFn(enumDesc protoreflect.EnumDescriptor) appendVarintFn {
+	names := make(map[protoreflect.EnumNumber]protoreflect.Name)
+	for i := 0; i < enumDesc.Values().Len(); i++ {
+		ev := enumDesc.Values().Get(i)
+		names[ev.Number()] = ev.Name()
+	}
+
 	return func(buf []byte, v uint64) ([]byte, bool) {
-		ev := enumDesc.Values().ByNumber(protoreflect.EnumNumber(v))
-		if ev == nil {
+		name, ok := names[protoreflect.EnumNumber(v)]
+		if !ok {
 			return strconv.AppendInt(buf, int64(v), 10), true
 		}
 		buf = append(buf, '"')
-		buf = append(buf, ev.Name()...)
+		buf = append(buf, name...)
 		buf = append(buf, '"')
 		return buf, false
 	}
 }
-

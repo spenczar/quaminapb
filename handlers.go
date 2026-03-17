@@ -9,18 +9,29 @@ import (
 )
 
 // fieldHandler bundles the pre-allocated field name with a type-specific fn
-// built once at schema construction time.
+// built once at schema construction time. The fn encodes all type-specific
+// logic as a closure — no type switches or descriptor lookups at call time.
 type fieldHandler struct {
 	name []byte
-	fn   func(f *Flattener, data []byte, packed bool,
+	fn   func(f *Flattener, data []byte,
 		tracker quamina.SegmentsTreeTracker,
 		arrayTrail []quamina.ArrayPos,
 		arrays *fieldArrays) ([]byte, error)
 }
 
-// msgSchema holds one handler per field number.
+// msgSchema holds one handler per (field number, wire type) pair.
+//
+// The map key is protowire.EncodeTag(num, typ) — the same uint64 varint that
+// appears on the wire. The hot loop reads tags with ConsumeVarint and looks
+// them up directly without calling DecodeTag, so decoding only happens in
+// the skip paths where ConsumeFieldValue needs num and typ.
+//
+// Repeated scalar fields get two entries: one at their natural wire type
+// (e.g. VarintType for int64) for the non-packed encoding, and one at
+// BytesType for the packed encoding. The packed/non-packed distinction is
+// resolved at construction time, not per-field at runtime.
 type msgSchema struct {
-	handlers map[protowire.Number]*fieldHandler
+	handlers map[uint64]*fieldHandler
 }
 
 // buildAllSchemas recursively builds msgSchema entries for desc and all transitively
@@ -31,76 +42,94 @@ func buildAllSchemas(desc protoreflect.MessageDescriptor, out map[protoreflect.F
 	}
 	fds := desc.Fields()
 	schema := &msgSchema{
-		handlers: make(map[protowire.Number]*fieldHandler, fds.Len()),
+		handlers: make(map[uint64]*fieldHandler, fds.Len()),
 	}
 	out[desc.FullName()] = schema
 	for i := range fds.Len() {
 		fd := fds.Get(i)
-		num := protowire.Number(fd.Number())
-		schema.handlers[num] = buildFieldHandler(fd)
+		registerFieldHandlers(schema, fd)
 		if fd.Kind() == protoreflect.MessageKind || fd.Kind() == protoreflect.GroupKind {
 			buildAllSchemas(fd.Message(), out)
 		}
 	}
 }
 
-// buildFieldHandler constructs a fieldHandler for fd, selecting the right factory
-// based on fd.Kind() and fd.IsList(). The type switch happens once here at
-// construction time, so the hot loop pays zero branches per field.
-func buildFieldHandler(fd protoreflect.FieldDescriptor) *fieldHandler {
+// registerFieldHandlers adds handler(s) for fd to schema.
+// Repeated scalar fields get two entries: one for their natural wire type
+// (non-packed, one element per tag) and one for BytesType (packed, all elements
+// in one blob). All other fields get a single entry.
+func registerFieldHandlers(schema *msgSchema, fd protoreflect.FieldDescriptor) {
 	name := []byte(fd.Name())
 	num := protowire.Number(fd.Number())
 
 	if fd.IsMap() {
-		return makeMapHandler(name, fd)
+		schema.handlers[protowire.EncodeTag(num, protowire.BytesType)] = makeMapHandler(name, fd)
+		return
 	}
 
 	isList := fd.IsList()
 
 	switch fd.Kind() {
 	case protoreflect.BoolKind:
-		return makeVarintHandler(name, num, isList, appendBool)
+		registerVarintHandlers(schema, name, num, isList, appendBool)
 	case protoreflect.EnumKind:
-		return makeVarintHandler(name, num, isList, makeEnumAppendFn(fd.Enum()))
+		registerVarintHandlers(schema, name, num, isList, makeEnumAppendFn(fd.Enum()))
 	case protoreflect.Sint32Kind:
-		return makeVarintHandler(name, num, isList, appendSint32)
+		registerVarintHandlers(schema, name, num, isList, appendSint32)
 	case protoreflect.Sint64Kind:
-		return makeVarintHandler(name, num, isList, appendSint64)
+		registerVarintHandlers(schema, name, num, isList, appendSint64)
 	case protoreflect.Int32Kind:
-		return makeVarintHandler(name, num, isList, appendInt32)
+		registerVarintHandlers(schema, name, num, isList, appendInt32)
 	case protoreflect.Int64Kind:
-		return makeVarintHandler(name, num, isList, appendInt64)
+		registerVarintHandlers(schema, name, num, isList, appendInt64)
 	case protoreflect.Uint32Kind, protoreflect.Uint64Kind:
-		return makeVarintHandler(name, num, isList, appendUint64)
+		registerVarintHandlers(schema, name, num, isList, appendUint64)
 	case protoreflect.FloatKind:
-		return makeFixed32Handler(name, num, isList, appendFloatVal)
+		registerFixed32Handlers(schema, name, num, isList, appendFloatVal)
 	case protoreflect.Fixed32Kind:
-		return makeFixed32Handler(name, num, isList, appendFixed32Val)
+		registerFixed32Handlers(schema, name, num, isList, appendFixed32Val)
 	case protoreflect.Sfixed32Kind:
-		return makeFixed32Handler(name, num, isList, appendSfixed32)
+		registerFixed32Handlers(schema, name, num, isList, appendSfixed32)
 	case protoreflect.DoubleKind:
-		return makeFixed64Handler(name, num, isList, appendDoubleVal)
+		registerFixed64Handlers(schema, name, num, isList, appendDoubleVal)
 	case protoreflect.Fixed64Kind:
-		return makeFixed64Handler(name, num, isList, appendFixed64Val)
+		registerFixed64Handlers(schema, name, num, isList, appendFixed64Val)
 	case protoreflect.Sfixed64Kind:
-		return makeFixed64Handler(name, num, isList, appendSfixed64)
+		registerFixed64Handlers(schema, name, num, isList, appendSfixed64)
 	case protoreflect.StringKind:
-		if isList {
-			return makeListStringHandler(name, num)
-		}
-		return makeSingularStringHandler(name)
+		schema.handlers[protowire.EncodeTag(num, protowire.BytesType)] = makeStringHandler(name, num, isList)
 	case protoreflect.BytesKind:
-		if isList {
-			return makeListBytesHandler(name, num)
-		}
-		return makeSingularBytesHandler(name)
+		schema.handlers[protowire.EncodeTag(num, protowire.BytesType)] = makeBytesHandler(name, num, isList)
 	case protoreflect.MessageKind, protoreflect.GroupKind:
-		if isList {
-			return makeListMessageHandler(name, num, fd.Message())
-		}
-		return makeSingularMessageHandler(name, fd.Message())
+		schema.handlers[protowire.EncodeTag(num, protowire.BytesType)] = makeMessageHandler(name, num, isList, fd.Message())
 	}
-	return nil
+}
+
+func registerVarintHandlers(schema *msgSchema, name []byte, num protowire.Number, isList bool, af appendVarintFn) {
+	if isList {
+		schema.handlers[protowire.EncodeTag(num, protowire.VarintType)] = makeVarintElementHandler(name, num, af)
+		schema.handlers[protowire.EncodeTag(num, protowire.BytesType)] = makeVarintPackedHandler(name, num, af)
+	} else {
+		schema.handlers[protowire.EncodeTag(num, protowire.VarintType)] = makeSingularVarintHandler(name, af)
+	}
+}
+
+func registerFixed32Handlers(schema *msgSchema, name []byte, num protowire.Number, isList bool, af appendFixed32Fn) {
+	if isList {
+		schema.handlers[protowire.EncodeTag(num, protowire.Fixed32Type)] = makeFixed32ElementHandler(name, num, af)
+		schema.handlers[protowire.EncodeTag(num, protowire.BytesType)] = makeFixed32PackedHandler(name, num, af)
+	} else {
+		schema.handlers[protowire.EncodeTag(num, protowire.Fixed32Type)] = makeSingularFixed32Handler(name, af)
+	}
+}
+
+func registerFixed64Handlers(schema *msgSchema, name []byte, num protowire.Number, isList bool, af appendFixed64Fn) {
+	if isList {
+		schema.handlers[protowire.EncodeTag(num, protowire.Fixed64Type)] = makeFixed64ElementHandler(name, num, af)
+		schema.handlers[protowire.EncodeTag(num, protowire.BytesType)] = makeFixed64PackedHandler(name, num, af)
+	} else {
+		schema.handlers[protowire.EncodeTag(num, protowire.Fixed64Type)] = makeSingularFixed64Handler(name, af)
+	}
 }
 
 // --- Handler factories ---
@@ -110,40 +139,8 @@ func buildFieldHandler(fd protoreflect.FieldDescriptor) *fieldHandler {
 // into Flattener.msgArrays (already heap-allocated), so there is no
 // per-call allocation from passing the pointer through the fn field.
 
-func makeVarintHandler(name []byte, num protowire.Number, isList bool, af appendVarintFn) *fieldHandler {
-	if isList {
-		return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, packed bool, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
-			if packed {
-				b, n := protowire.ConsumeBytes(data)
-				if n < 0 {
-					return nil, protowire.ParseError(n)
-				}
-				data = data[n:]
-				if path := tracker.PathForSegment(name); path != nil {
-					if err := f.decodePackedVarint(b, num, path, af, arrays, arrayTrail); err != nil {
-						return nil, err
-					}
-				}
-			} else {
-				v, n := protowire.ConsumeVarint(data)
-				if n < 0 {
-					return nil, protowire.ParseError(n)
-				}
-				data = data[n:]
-				fieldTrail := arrays.trail(num, arrayTrail, &f.arrayPosBuf, &f.nextArray)
-				if path := tracker.PathForSegment(name); path != nil {
-					start := len(f.valBuf)
-					var isNum bool
-					f.valBuf, isNum = af(f.valBuf, v)
-					f.fields = append(f.fields, quamina.Field{
-						Path: path, Val: f.valBuf[start:], ArrayTrail: fieldTrail, IsNumber: isNum,
-					})
-				}
-			}
-			return data, nil
-		}}
-	}
-	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, packed bool, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
+func makeSingularVarintHandler(name []byte, af appendVarintFn) *fieldHandler {
+	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
 		v, n := protowire.ConsumeVarint(data)
 		if n < 0 {
 			return nil, protowire.ParseError(n)
@@ -161,40 +158,44 @@ func makeVarintHandler(name []byte, num protowire.Number, isList bool, af append
 	}}
 }
 
-func makeFixed32Handler(name []byte, num protowire.Number, isList bool, af appendFixed32Fn) *fieldHandler {
-	if isList {
-		return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, packed bool, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
-			if packed {
-				b, n := protowire.ConsumeBytes(data)
-				if n < 0 {
-					return nil, protowire.ParseError(n)
-				}
-				data = data[n:]
-				if path := tracker.PathForSegment(name); path != nil {
-					if err := f.decodePackedFixed32(b, num, path, af, arrays, arrayTrail); err != nil {
-						return nil, err
-					}
-				}
-			} else {
-				v, n := protowire.ConsumeFixed32(data)
-				if n < 0 {
-					return nil, protowire.ParseError(n)
-				}
-				data = data[n:]
-				fieldTrail := arrays.trail(num, arrayTrail, &f.arrayPosBuf, &f.nextArray)
-				if path := tracker.PathForSegment(name); path != nil {
-					start := len(f.valBuf)
-					var isNum bool
-					f.valBuf, isNum = af(f.valBuf, v)
-					f.fields = append(f.fields, quamina.Field{
-						Path: path, Val: f.valBuf[start:], ArrayTrail: fieldTrail, IsNumber: isNum,
-					})
-				}
+func makeVarintElementHandler(name []byte, num protowire.Number, af appendVarintFn) *fieldHandler {
+	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
+		v, n := protowire.ConsumeVarint(data)
+		if n < 0 {
+			return nil, protowire.ParseError(n)
+		}
+		data = data[n:]
+		fieldTrail := arrays.trail(num, arrayTrail, &f.arrayPosBuf, &f.nextArray)
+		if path := tracker.PathForSegment(name); path != nil {
+			start := len(f.valBuf)
+			var isNum bool
+			f.valBuf, isNum = af(f.valBuf, v)
+			f.fields = append(f.fields, quamina.Field{
+				Path: path, Val: f.valBuf[start:], ArrayTrail: fieldTrail, IsNumber: isNum,
+			})
+		}
+		return data, nil
+	}}
+}
+
+func makeVarintPackedHandler(name []byte, num protowire.Number, af appendVarintFn) *fieldHandler {
+	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
+		b, n := protowire.ConsumeBytes(data)
+		if n < 0 {
+			return nil, protowire.ParseError(n)
+		}
+		data = data[n:]
+		if path := tracker.PathForSegment(name); path != nil {
+			if err := f.decodePackedVarint(b, num, path, af, arrays, arrayTrail); err != nil {
+				return nil, err
 			}
-			return data, nil
-		}}
-	}
-	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, packed bool, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
+		}
+		return data, nil
+	}}
+}
+
+func makeSingularFixed32Handler(name []byte, af appendFixed32Fn) *fieldHandler {
+	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
 		v, n := protowire.ConsumeFixed32(data)
 		if n < 0 {
 			return nil, protowire.ParseError(n)
@@ -212,40 +213,44 @@ func makeFixed32Handler(name []byte, num protowire.Number, isList bool, af appen
 	}}
 }
 
-func makeFixed64Handler(name []byte, num protowire.Number, isList bool, af appendFixed64Fn) *fieldHandler {
-	if isList {
-		return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, packed bool, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
-			if packed {
-				b, n := protowire.ConsumeBytes(data)
-				if n < 0 {
-					return nil, protowire.ParseError(n)
-				}
-				data = data[n:]
-				if path := tracker.PathForSegment(name); path != nil {
-					if err := f.decodePackedFixed64(b, num, path, af, arrays, arrayTrail); err != nil {
-						return nil, err
-					}
-				}
-			} else {
-				v, n := protowire.ConsumeFixed64(data)
-				if n < 0 {
-					return nil, protowire.ParseError(n)
-				}
-				data = data[n:]
-				fieldTrail := arrays.trail(num, arrayTrail, &f.arrayPosBuf, &f.nextArray)
-				if path := tracker.PathForSegment(name); path != nil {
-					start := len(f.valBuf)
-					var isNum bool
-					f.valBuf, isNum = af(f.valBuf, v)
-					f.fields = append(f.fields, quamina.Field{
-						Path: path, Val: f.valBuf[start:], ArrayTrail: fieldTrail, IsNumber: isNum,
-					})
-				}
+func makeFixed32ElementHandler(name []byte, num protowire.Number, af appendFixed32Fn) *fieldHandler {
+	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
+		v, n := protowire.ConsumeFixed32(data)
+		if n < 0 {
+			return nil, protowire.ParseError(n)
+		}
+		data = data[n:]
+		fieldTrail := arrays.trail(num, arrayTrail, &f.arrayPosBuf, &f.nextArray)
+		if path := tracker.PathForSegment(name); path != nil {
+			start := len(f.valBuf)
+			var isNum bool
+			f.valBuf, isNum = af(f.valBuf, v)
+			f.fields = append(f.fields, quamina.Field{
+				Path: path, Val: f.valBuf[start:], ArrayTrail: fieldTrail, IsNumber: isNum,
+			})
+		}
+		return data, nil
+	}}
+}
+
+func makeFixed32PackedHandler(name []byte, num protowire.Number, af appendFixed32Fn) *fieldHandler {
+	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
+		b, n := protowire.ConsumeBytes(data)
+		if n < 0 {
+			return nil, protowire.ParseError(n)
+		}
+		data = data[n:]
+		if path := tracker.PathForSegment(name); path != nil {
+			if err := f.decodePackedFixed32(b, num, path, af, arrays, arrayTrail); err != nil {
+				return nil, err
 			}
-			return data, nil
-		}}
-	}
-	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, packed bool, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
+		}
+		return data, nil
+	}}
+}
+
+func makeSingularFixed64Handler(name []byte, af appendFixed64Fn) *fieldHandler {
+	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
 		v, n := protowire.ConsumeFixed64(data)
 		if n < 0 {
 			return nil, protowire.ParseError(n)
@@ -263,29 +268,9 @@ func makeFixed64Handler(name []byte, num protowire.Number, isList bool, af appen
 	}}
 }
 
-func makeSingularStringHandler(name []byte) *fieldHandler {
-	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, packed bool, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
-		b, n := protowire.ConsumeBytes(data)
-		if n < 0 {
-			return nil, protowire.ParseError(n)
-		}
-		data = data[n:]
-		if path := tracker.PathForSegment(name); path != nil {
-			start := len(f.valBuf)
-			f.valBuf = append(f.valBuf, '"')
-			f.valBuf = append(f.valBuf, b...)
-			f.valBuf = append(f.valBuf, '"')
-			f.fields = append(f.fields, quamina.Field{
-				Path: path, Val: f.valBuf[start:], ArrayTrail: arrayTrail, IsNumber: false,
-			})
-		}
-		return data, nil
-	}}
-}
-
-func makeListStringHandler(name []byte, num protowire.Number) *fieldHandler {
-	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, packed bool, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
-		b, n := protowire.ConsumeBytes(data)
+func makeFixed64ElementHandler(name []byte, num protowire.Number, af appendFixed64Fn) *fieldHandler {
+	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
+		v, n := protowire.ConsumeFixed64(data)
 		if n < 0 {
 			return nil, protowire.ParseError(n)
 		}
@@ -293,63 +278,25 @@ func makeListStringHandler(name []byte, num protowire.Number) *fieldHandler {
 		fieldTrail := arrays.trail(num, arrayTrail, &f.arrayPosBuf, &f.nextArray)
 		if path := tracker.PathForSegment(name); path != nil {
 			start := len(f.valBuf)
-			f.valBuf = append(f.valBuf, '"')
-			f.valBuf = append(f.valBuf, b...)
-			f.valBuf = append(f.valBuf, '"')
+			var isNum bool
+			f.valBuf, isNum = af(f.valBuf, v)
 			f.fields = append(f.fields, quamina.Field{
-				Path: path, Val: f.valBuf[start:], ArrayTrail: fieldTrail, IsNumber: false,
+				Path: path, Val: f.valBuf[start:], ArrayTrail: fieldTrail, IsNumber: isNum,
 			})
 		}
 		return data, nil
 	}}
 }
 
-func makeSingularBytesHandler(name []byte) *fieldHandler {
-	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, packed bool, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
+func makeFixed64PackedHandler(name []byte, num protowire.Number, af appendFixed64Fn) *fieldHandler {
+	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
 		b, n := protowire.ConsumeBytes(data)
 		if n < 0 {
 			return nil, protowire.ParseError(n)
 		}
 		data = data[n:]
 		if path := tracker.PathForSegment(name); path != nil {
-			start := len(f.valBuf)
-			f.valBuf = base64.StdEncoding.AppendEncode(f.valBuf, b)
-			f.fields = append(f.fields, quamina.Field{
-				Path: path, Val: f.valBuf[start:], ArrayTrail: arrayTrail, IsNumber: false,
-			})
-		}
-		return data, nil
-	}}
-}
-
-func makeListBytesHandler(name []byte, num protowire.Number) *fieldHandler {
-	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, packed bool, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
-		b, n := protowire.ConsumeBytes(data)
-		if n < 0 {
-			return nil, protowire.ParseError(n)
-		}
-		data = data[n:]
-		fieldTrail := arrays.trail(num, arrayTrail, &f.arrayPosBuf, &f.nextArray)
-		if path := tracker.PathForSegment(name); path != nil {
-			start := len(f.valBuf)
-			f.valBuf = base64.StdEncoding.AppendEncode(f.valBuf, b)
-			f.fields = append(f.fields, quamina.Field{
-				Path: path, Val: f.valBuf[start:], ArrayTrail: fieldTrail, IsNumber: false,
-			})
-		}
-		return data, nil
-	}}
-}
-
-func makeSingularMessageHandler(name []byte, childDesc protoreflect.MessageDescriptor) *fieldHandler {
-	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, packed bool, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
-		b, n := protowire.ConsumeBytes(data)
-		if n < 0 {
-			return nil, protowire.ParseError(n)
-		}
-		data = data[n:]
-		if child, ok := tracker.Get(name); ok {
-			if err := f.flattenMsg(b, childDesc, child, arrayTrail); err != nil {
+			if err := f.decodePackedFixed64(b, num, path, af, arrays, arrayTrail); err != nil {
 				return nil, err
 			}
 		}
@@ -357,16 +304,107 @@ func makeSingularMessageHandler(name []byte, childDesc protoreflect.MessageDescr
 	}}
 }
 
-func makeListMessageHandler(name []byte, num protowire.Number, childDesc protoreflect.MessageDescriptor) *fieldHandler {
-	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, packed bool, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
+func makeStringHandler(name []byte, num protowire.Number, isList bool) *fieldHandler {
+	if isList {
+		return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
+			b, n := protowire.ConsumeBytes(data)
+			if n < 0 {
+				return nil, protowire.ParseError(n)
+			}
+			data = data[n:]
+			fieldTrail := arrays.trail(num, arrayTrail, &f.arrayPosBuf, &f.nextArray)
+			if path := tracker.PathForSegment(name); path != nil {
+				start := len(f.valBuf)
+				f.valBuf = append(f.valBuf, '"')
+				f.valBuf = append(f.valBuf, b...)
+				f.valBuf = append(f.valBuf, '"')
+				f.fields = append(f.fields, quamina.Field{
+					Path: path, Val: f.valBuf[start:], ArrayTrail: fieldTrail, IsNumber: false,
+				})
+			}
+			return data, nil
+		}}
+	}
+	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
 		b, n := protowire.ConsumeBytes(data)
 		if n < 0 {
 			return nil, protowire.ParseError(n)
 		}
 		data = data[n:]
-		fieldTrail := arrays.trail(num, arrayTrail, &f.arrayPosBuf, &f.nextArray)
+		if path := tracker.PathForSegment(name); path != nil {
+			start := len(f.valBuf)
+			f.valBuf = append(f.valBuf, '"')
+			f.valBuf = append(f.valBuf, b...)
+			f.valBuf = append(f.valBuf, '"')
+			f.fields = append(f.fields, quamina.Field{
+				Path: path, Val: f.valBuf[start:], ArrayTrail: arrayTrail, IsNumber: false,
+			})
+		}
+		return data, nil
+	}}
+}
+
+func makeBytesHandler(name []byte, num protowire.Number, isList bool) *fieldHandler {
+	if isList {
+		return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
+			b, n := protowire.ConsumeBytes(data)
+			if n < 0 {
+				return nil, protowire.ParseError(n)
+			}
+			data = data[n:]
+			fieldTrail := arrays.trail(num, arrayTrail, &f.arrayPosBuf, &f.nextArray)
+			if path := tracker.PathForSegment(name); path != nil {
+				start := len(f.valBuf)
+				f.valBuf = base64.StdEncoding.AppendEncode(f.valBuf, b)
+				f.fields = append(f.fields, quamina.Field{
+					Path: path, Val: f.valBuf[start:], ArrayTrail: fieldTrail, IsNumber: false,
+				})
+			}
+			return data, nil
+		}}
+	}
+	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
+		b, n := protowire.ConsumeBytes(data)
+		if n < 0 {
+			return nil, protowire.ParseError(n)
+		}
+		data = data[n:]
+		if path := tracker.PathForSegment(name); path != nil {
+			start := len(f.valBuf)
+			f.valBuf = base64.StdEncoding.AppendEncode(f.valBuf, b)
+			f.fields = append(f.fields, quamina.Field{
+				Path: path, Val: f.valBuf[start:], ArrayTrail: arrayTrail, IsNumber: false,
+			})
+		}
+		return data, nil
+	}}
+}
+
+func makeMessageHandler(name []byte, num protowire.Number, isList bool, childDesc protoreflect.MessageDescriptor) *fieldHandler {
+	if isList {
+		return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
+			b, n := protowire.ConsumeBytes(data)
+			if n < 0 {
+				return nil, protowire.ParseError(n)
+			}
+			data = data[n:]
+			fieldTrail := arrays.trail(num, arrayTrail, &f.arrayPosBuf, &f.nextArray)
+			if child, ok := tracker.Get(name); ok {
+				if err := f.flattenMsg(b, childDesc, child, fieldTrail); err != nil {
+					return nil, err
+				}
+			}
+			return data, nil
+		}}
+	}
+	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
+		b, n := protowire.ConsumeBytes(data)
+		if n < 0 {
+			return nil, protowire.ParseError(n)
+		}
+		data = data[n:]
 		if child, ok := tracker.Get(name); ok {
-			if err := f.flattenMsg(b, childDesc, child, fieldTrail); err != nil {
+			if err := f.flattenMsg(b, childDesc, child, arrayTrail); err != nil {
 				return nil, err
 			}
 		}
@@ -387,7 +425,7 @@ func makeMapHandler(name []byte, mapFd protoreflect.FieldDescriptor) *fieldHandl
 	entryDesc := mapFd.Message()
 	keyFd := entryDesc.Fields().ByNumber(1)
 	valEmit := buildMapValueEmitter(entryDesc.Fields().ByNumber(2))
-	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, packed bool, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
+	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
 		b, n := protowire.ConsumeBytes(data)
 		if n < 0 {
 			return nil, protowire.ParseError(n)
