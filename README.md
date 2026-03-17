@@ -2,7 +2,7 @@
 
 A [quamina](https://github.com/timbray/quamina) `Flattener` for binary-encoded Protocol Buffer messages.
 
-Quamina matches patterns against events by first "flattening" the event into a list of `(path, value)` pairs. This library provides that flattening step for proto3 wire-format messages, so you can use quamina's fast pattern-matching engine directly against binary protobuf data — no intermediate JSON serialization required.
+Quamina matches patterns against events by first "flattening" the event into a list of `(path, value)` pairs. This library provides that flattening step for proto3 wire-format messages, so you can use quamina's fast pattern-matching engine directly against binary protobuf data.
 
 ## Usage
 
