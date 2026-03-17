@@ -411,7 +411,7 @@ const file_testproto_proto_rawDesc = "" +
 	"\aUNKNOWN\x10\x00\x12\v\n" +
 	"\aPENDING\x10\x01\x12\n" +
 	"\n" +
-	"\x06ACTIVE\x10\x02B9Z7github.com/spenczar/quamina-protobuf/internal/testprotob\x06proto3"
+	"\x06ACTIVE\x10\x02B2Z0github.com/spenczar/quaminapb/internal/testprotob\x06proto3"
 
 var (
 	file_testproto_proto_rawDescOnce sync.Once

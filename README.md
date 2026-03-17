@@ -9,12 +9,12 @@ Quamina matches patterns against events by first "flattening" the event into a l
 ```go
 import (
     "quamina.net/go/quamina/v2"
-    "github.com/spenczar/quamina-protobuf/flattenpb"
+    "github.com/spenczar/quaminapb"
 )
 
 // Build a flattener from any generated message descriptor.
 desc := (&mypb.MyMessage{}).ProtoReflect().Descriptor()
-fl := flattenpb.New(desc)
+fl := quaminapb.New(desc)
 
 // Wire it into quamina.
 q, err := quamina.New(quamina.WithFlattener(fl))
@@ -46,7 +46,7 @@ The `FewFields` case reflects typical quamina usage where patterns only care abo
 Run benchmarks yourself:
 
 ```
-go test ./flattenpb/... -bench=. -benchmem
+go test ./... -bench=. -benchmem
 ```
 
 ## Development

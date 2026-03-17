@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package test;
 
-option go_package = "github.com/spenczar/quamina-protobuf/internal/testproto";
+option go_package = "github.com/spenczar/quaminapb/internal/testproto";
 
 enum TestStatus {
   UNKNOWN = 0;

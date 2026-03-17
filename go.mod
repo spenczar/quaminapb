@@ -1,4 +1,4 @@
-module github.com/spenczar/quamina-protobuf
+module github.com/spenczar/quaminapb
 
 go 1.23
 

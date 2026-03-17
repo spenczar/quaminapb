@@ -1,5 +1,5 @@
-// Package flattenpb implements a quamina.Flattener for binary-encoded Protocol Buffer messages.
-package flattenpb
+// Package quaminapb implements a quamina.Flattener for binary-encoded Protocol Buffer messages.
+package quaminapb
 
 import (
 	"encoding/base64"

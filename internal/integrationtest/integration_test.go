@@ -1,7 +1,8 @@
 // Package integrationtest runs end-to-end tests against a real quamina
-// instance configured with a ProtoFlattener. Unit tests in flattenpb/ verify
-// what fields are emitted; these tests verify that the full match pipeline
-// produces the right hits (and non-hits) for realistic patterns and messages.
+// instance configured with a ProtoFlattener. Unit tests in the root package
+// verify what fields are emitted; these tests verify that the full match
+// pipeline produces the right hits (and non-hits) for realistic patterns and
+// messages.
 package integrationtest
 
 import (
@@ -9,8 +10,8 @@ import (
 
 	quamina "quamina.net/go/quamina/v2"
 
-	"github.com/spenczar/quamina-protobuf/flattenpb"
-	"github.com/spenczar/quamina-protobuf/internal/testproto"
+	quaminapb "github.com/spenczar/quaminapb"
+	"github.com/spenczar/quaminapb/internal/testproto"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -25,7 +26,7 @@ func mustMarshal(m proto.Message) []byte {
 func newQuamina(t *testing.T) *quamina.Quamina {
 	t.Helper()
 	desc := (&testproto.TestMsg{}).ProtoReflect().Descriptor()
-	fl := flattenpb.New(desc)
+	fl := quaminapb.New(desc)
 	q, err := quamina.New(quamina.WithFlattener(fl))
 	if err != nil {
 		t.Fatal(err)

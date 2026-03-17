@@ -1,11 +1,11 @@
-package flattenpb_test
+package quaminapb_test
 
 import (
 	"testing"
 
-	"github.com/spenczar/quamina-protobuf/flattenpb"
-	"github.com/spenczar/quamina-protobuf/internal/testproto"
-	"github.com/spenczar/quamina-protobuf/internal/testtracker"
+	quaminapb "github.com/spenczar/quaminapb"
+	"github.com/spenczar/quaminapb/internal/testproto"
+	"github.com/spenczar/quaminapb/internal/testtracker"
 )
 
 // benchEvent is a wire-encoded TestMsg with a mix of scalar, nested, and
@@ -34,7 +34,7 @@ func init() {
 // Benchmark_ProtoFlattener_FewFields benchmarks a tracker that only cares
 // about one or two leaf paths — the common case in a selective pattern.
 func Benchmark_ProtoFlattener_FewFields(b *testing.B) {
-	fl := flattenpb.New(testDesc)
+	fl := quaminapb.New(testDesc)
 	tr := testtracker.New("id", "nested\nvalue")
 
 	b.ReportAllocs()
@@ -53,7 +53,7 @@ func Benchmark_ProtoFlattener_FewFields(b *testing.B) {
 // Benchmark_ProtoFlattener_ManyFields benchmarks a tracker that cares about
 // all paths — the worst case for the pruning optimisation.
 func Benchmark_ProtoFlattener_ManyFields(b *testing.B) {
-	fl := flattenpb.New(testDesc)
+	fl := quaminapb.New(testDesc)
 	tr := testtracker.New(
 		"id", "name", "flag", "score", "ratio", "data", "status",
 		"nested\nvalue", "nested\ncount",

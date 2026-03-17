@@ -1,12 +1,12 @@
-package flattenpb_test
+package quaminapb_test
 
 import (
 	"bytes"
 	"testing"
 
-	"github.com/spenczar/quamina-protobuf/flattenpb"
-	"github.com/spenczar/quamina-protobuf/internal/testproto"
-	"github.com/spenczar/quamina-protobuf/internal/testtracker"
+	quaminapb "github.com/spenczar/quaminapb"
+	"github.com/spenczar/quaminapb/internal/testproto"
+	"github.com/spenczar/quaminapb/internal/testtracker"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -45,7 +45,7 @@ func runCases(t *testing.T, cases []tc) {
 	t.Helper()
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			fl := flattenpb.New(testDesc)
+			fl := quaminapb.New(testDesc)
 			tr := testtracker.New(c.paths...)
 			fields, err := fl.Flatten(c.data, tr)
 			if c.wantErr {
@@ -306,7 +306,7 @@ func TestRepeatedScalar(t *testing.T) {
 
 	// Also verify ArrayTrail is set correctly for packed fields.
 	t.Run("packed ArrayTrail", func(t *testing.T) {
-		fl := flattenpb.New(testDesc)
+		fl := quaminapb.New(testDesc)
 		tr := testtracker.New("tags")
 		fields, err := fl.Flatten(packed, tr)
 		if err != nil {
@@ -372,7 +372,7 @@ func TestRepeatedMessage(t *testing.T) {
 	// ArrayTrail isolation: items[0].value and items[1].value must be in
 	// different array positions so cross-element patterns don't match.
 	t.Run("ArrayTrail cross-element isolation", func(t *testing.T) {
-		fl := flattenpb.New(testDesc)
+		fl := quaminapb.New(testDesc)
 		tr := testtracker.New("items\nvalue", "items\ncount")
 		fields, err := fl.Flatten(msg, tr)
 		if err != nil {
@@ -425,7 +425,7 @@ func TestRepeatedMsgInSingularNested(t *testing.T) {
 	})
 
 	t.Run("ArrayTrail positions", func(t *testing.T) {
-		fl := flattenpb.New(testDesc)
+		fl := quaminapb.New(testDesc)
 		tr := testtracker.New("nested\nparts\nleaf")
 		fields, err := fl.Flatten(msg, tr)
 		if err != nil {
@@ -480,7 +480,7 @@ func TestDoublyNestedRepeated(t *testing.T) {
 	})
 
 	t.Run("ArrayTrail structure", func(t *testing.T) {
-		fl := flattenpb.New(testDesc)
+		fl := quaminapb.New(testDesc)
 		tr := testtracker.New("items\nparts\nleaf")
 		fields, err := fl.Flatten(msg, tr)
 		if err != nil {
@@ -583,7 +583,7 @@ func TestErrors(t *testing.T) {
 }
 
 func TestCopy(t *testing.T) {
-	orig := flattenpb.New(testDesc)
+	orig := quaminapb.New(testDesc)
 	cpy := orig.Copy()
 
 	data := mustMarshal(&testproto.TestMsg{Id: 7})
@@ -607,7 +607,7 @@ func TestCopy(t *testing.T) {
 // so that any shared mutable state (fields, valBuf, arrayPosBuf) would cause
 // one result to overwrite the other.
 func TestCopyIndependence(t *testing.T) {
-	orig := flattenpb.New(testDesc)
+	orig := quaminapb.New(testDesc)
 	cpy := orig.Copy()
 
 	msgA := mustMarshal(&testproto.TestMsg{Id: 1, Name: "alice"})
@@ -644,7 +644,7 @@ func TestCopyIndependence(t *testing.T) {
 }
 
 func TestWithFlattener(t *testing.T) {
-	fl := flattenpb.New(testDesc)
+	fl := quaminapb.New(testDesc)
 	q, err := quamina.New(quamina.WithFlattener(fl))
 	if err != nil {
 		t.Fatal(err)
