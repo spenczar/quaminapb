@@ -2,7 +2,6 @@
 package quaminapb
 
 import (
-	"encoding/base64"
 	"fmt"
 	"strconv"
 
@@ -160,7 +159,7 @@ func (f *Flattener) flattenMsg(
 			continue
 		}
 		var err error
-		data, err = h.fn(f, data, typ, tracker, arrayTrail, arrays)
+		data, err = h.fn(f, data, typ == protowire.BytesType, tracker, arrayTrail, arrays)
 		if err != nil {
 			return err
 		}
@@ -169,21 +168,15 @@ func (f *Flattener) flattenMsg(
 }
 
 // flattenMapEntry parses a single map-entry message (key=1, value=2) and emits the value
-// with a path extended by the key.
+// with a path extended by the key. keyFd and valEmit are precomputed by makeMapHandler.
 func (f *Flattener) flattenMapEntry(
 	data []byte,
-	mapFd protoreflect.FieldDescriptor,
+	keyFd protoreflect.FieldDescriptor,
+	valEmit mapValueEmitFn,
 	tracker quamina.SegmentsTreeTracker,
 	fieldName []byte,
 	arrayTrail []quamina.ArrayPos,
 ) error {
-	entryDesc := mapFd.Message()
-	keyFd := entryDesc.Fields().ByNumber(1)
-	valFd := entryDesc.Fields().ByNumber(2)
-	if keyFd == nil || valFd == nil {
-		return fmt.Errorf("flattenpb: map entry missing key or value field")
-	}
-
 	// First pass: extract the key.
 	var keyBytes []byte
 	scan := data
@@ -218,7 +211,7 @@ func (f *Flattener) flattenMapEntry(
 		return nil
 	}
 
-	// Second pass: extract and emit the value.
+	// Second pass: emit the value.
 	scan = data
 	for len(scan) > 0 {
 		num, typ, n := protowire.ConsumeTag(scan)
@@ -227,7 +220,7 @@ func (f *Flattener) flattenMapEntry(
 		}
 		scan = scan[n:]
 		if num == 2 {
-			if err := f.emitMapValue(scan, typ, valFd, mapTracker, keyBytes, arrayTrail); err != nil {
+			if err := valEmit(f, scan, mapTracker, keyBytes, arrayTrail); err != nil {
 				return err
 			}
 		}
@@ -276,88 +269,3 @@ func extractKeyBytes(keyFd protoreflect.FieldDescriptor, data []byte, typ protow
 	}
 }
 
-// emitMapValue emits the map value field, with the key as the final path segment.
-func (f *Flattener) emitMapValue(
-	data []byte,
-	typ protowire.Type,
-	valFd protoreflect.FieldDescriptor,
-	mapTracker quamina.SegmentsTreeTracker,
-	keyBytes []byte,
-	arrayTrail []quamina.ArrayPos,
-) error {
-	switch typ {
-	case protowire.VarintType:
-		v, n := protowire.ConsumeVarint(data)
-		if n < 0 {
-			return protowire.ParseError(n)
-		}
-		_ = n
-		if path := mapTracker.PathForSegment(keyBytes); path != nil {
-			start := len(f.valBuf)
-			var isNum bool
-			f.valBuf, isNum = appendVarint(f.valBuf, valFd, v)
-			f.fields = append(f.fields, quamina.Field{
-				Path: path, Val: f.valBuf[start:], ArrayTrail: arrayTrail, IsNumber: isNum,
-			})
-		}
-	case protowire.Fixed32Type:
-		v, n := protowire.ConsumeFixed32(data)
-		if n < 0 {
-			return protowire.ParseError(n)
-		}
-		_ = n
-		if path := mapTracker.PathForSegment(keyBytes); path != nil {
-			start := len(f.valBuf)
-			var isNum bool
-			f.valBuf, isNum = appendFixed32(f.valBuf, valFd, v)
-			f.fields = append(f.fields, quamina.Field{
-				Path: path, Val: f.valBuf[start:], ArrayTrail: arrayTrail, IsNumber: isNum,
-			})
-		}
-	case protowire.Fixed64Type:
-		v, n := protowire.ConsumeFixed64(data)
-		if n < 0 {
-			return protowire.ParseError(n)
-		}
-		_ = n
-		if path := mapTracker.PathForSegment(keyBytes); path != nil {
-			start := len(f.valBuf)
-			var isNum bool
-			f.valBuf, isNum = appendFixed64(f.valBuf, valFd, v)
-			f.fields = append(f.fields, quamina.Field{
-				Path: path, Val: f.valBuf[start:], ArrayTrail: arrayTrail, IsNumber: isNum,
-			})
-		}
-	case protowire.BytesType:
-		b, n := protowire.ConsumeBytes(data)
-		if n < 0 {
-			return protowire.ParseError(n)
-		}
-		_ = n
-		switch valFd.Kind() {
-		case protoreflect.MessageKind, protoreflect.GroupKind:
-			if child, ok := mapTracker.Get(keyBytes); ok {
-				return f.flattenMsg(b, valFd.Message(), child, arrayTrail)
-			}
-		case protoreflect.StringKind:
-			if path := mapTracker.PathForSegment(keyBytes); path != nil {
-				start := len(f.valBuf)
-				f.valBuf = append(f.valBuf, '"')
-				f.valBuf = append(f.valBuf, b...)
-				f.valBuf = append(f.valBuf, '"')
-				f.fields = append(f.fields, quamina.Field{
-					Path: path, Val: f.valBuf[start:], ArrayTrail: arrayTrail, IsNumber: false,
-				})
-			}
-		case protoreflect.BytesKind:
-			if path := mapTracker.PathForSegment(keyBytes); path != nil {
-				start := len(f.valBuf)
-				f.valBuf = base64.StdEncoding.AppendEncode(f.valBuf, b)
-				f.fields = append(f.fields, quamina.Field{
-					Path: path, Val: f.valBuf[start:], ArrayTrail: arrayTrail, IsNumber: false,
-				})
-			}
-		}
-	}
-	return nil
-}

@@ -12,7 +12,7 @@ import (
 // built once at schema construction time.
 type fieldHandler struct {
 	name []byte
-	fn   func(f *Flattener, data []byte, typ protowire.Type,
+	fn   func(f *Flattener, data []byte, packed bool,
 		tracker quamina.SegmentsTreeTracker,
 		arrayTrail []quamina.ArrayPos,
 		arrays *fieldArrays) ([]byte, error)
@@ -112,9 +112,8 @@ func buildFieldHandler(fd protoreflect.FieldDescriptor) *fieldHandler {
 
 func makeVarintHandler(name []byte, num protowire.Number, isList bool, af appendVarintFn) *fieldHandler {
 	if isList {
-		return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, typ protowire.Type,
-			tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
-			if typ == protowire.BytesType {
+		return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, packed bool, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
+			if packed {
 				b, n := protowire.ConsumeBytes(data)
 				if n < 0 {
 					return nil, protowire.ParseError(n)
@@ -144,8 +143,7 @@ func makeVarintHandler(name []byte, num protowire.Number, isList bool, af append
 			return data, nil
 		}}
 	}
-	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, typ protowire.Type,
-		tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
+	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, packed bool, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
 		v, n := protowire.ConsumeVarint(data)
 		if n < 0 {
 			return nil, protowire.ParseError(n)
@@ -165,9 +163,8 @@ func makeVarintHandler(name []byte, num protowire.Number, isList bool, af append
 
 func makeFixed32Handler(name []byte, num protowire.Number, isList bool, af appendFixed32Fn) *fieldHandler {
 	if isList {
-		return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, typ protowire.Type,
-			tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
-			if typ == protowire.BytesType {
+		return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, packed bool, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
+			if packed {
 				b, n := protowire.ConsumeBytes(data)
 				if n < 0 {
 					return nil, protowire.ParseError(n)
@@ -197,8 +194,7 @@ func makeFixed32Handler(name []byte, num protowire.Number, isList bool, af appen
 			return data, nil
 		}}
 	}
-	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, typ protowire.Type,
-		tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
+	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, packed bool, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
 		v, n := protowire.ConsumeFixed32(data)
 		if n < 0 {
 			return nil, protowire.ParseError(n)
@@ -218,9 +214,8 @@ func makeFixed32Handler(name []byte, num protowire.Number, isList bool, af appen
 
 func makeFixed64Handler(name []byte, num protowire.Number, isList bool, af appendFixed64Fn) *fieldHandler {
 	if isList {
-		return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, typ protowire.Type,
-			tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
-			if typ == protowire.BytesType {
+		return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, packed bool, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
+			if packed {
 				b, n := protowire.ConsumeBytes(data)
 				if n < 0 {
 					return nil, protowire.ParseError(n)
@@ -250,8 +245,7 @@ func makeFixed64Handler(name []byte, num protowire.Number, isList bool, af appen
 			return data, nil
 		}}
 	}
-	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, typ protowire.Type,
-		tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
+	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, packed bool, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
 		v, n := protowire.ConsumeFixed64(data)
 		if n < 0 {
 			return nil, protowire.ParseError(n)
@@ -270,8 +264,7 @@ func makeFixed64Handler(name []byte, num protowire.Number, isList bool, af appen
 }
 
 func makeSingularStringHandler(name []byte) *fieldHandler {
-	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, typ protowire.Type,
-		tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
+	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, packed bool, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
 		b, n := protowire.ConsumeBytes(data)
 		if n < 0 {
 			return nil, protowire.ParseError(n)
@@ -291,8 +284,7 @@ func makeSingularStringHandler(name []byte) *fieldHandler {
 }
 
 func makeListStringHandler(name []byte, num protowire.Number) *fieldHandler {
-	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, typ protowire.Type,
-		tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
+	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, packed bool, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
 		b, n := protowire.ConsumeBytes(data)
 		if n < 0 {
 			return nil, protowire.ParseError(n)
@@ -313,8 +305,7 @@ func makeListStringHandler(name []byte, num protowire.Number) *fieldHandler {
 }
 
 func makeSingularBytesHandler(name []byte) *fieldHandler {
-	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, typ protowire.Type,
-		tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
+	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, packed bool, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
 		b, n := protowire.ConsumeBytes(data)
 		if n < 0 {
 			return nil, protowire.ParseError(n)
@@ -332,8 +323,7 @@ func makeSingularBytesHandler(name []byte) *fieldHandler {
 }
 
 func makeListBytesHandler(name []byte, num protowire.Number) *fieldHandler {
-	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, typ protowire.Type,
-		tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
+	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, packed bool, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
 		b, n := protowire.ConsumeBytes(data)
 		if n < 0 {
 			return nil, protowire.ParseError(n)
@@ -352,8 +342,7 @@ func makeListBytesHandler(name []byte, num protowire.Number) *fieldHandler {
 }
 
 func makeSingularMessageHandler(name []byte, childDesc protoreflect.MessageDescriptor) *fieldHandler {
-	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, typ protowire.Type,
-		tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
+	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, packed bool, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
 		b, n := protowire.ConsumeBytes(data)
 		if n < 0 {
 			return nil, protowire.ParseError(n)
@@ -369,8 +358,7 @@ func makeSingularMessageHandler(name []byte, childDesc protoreflect.MessageDescr
 }
 
 func makeListMessageHandler(name []byte, num protowire.Number, childDesc protoreflect.MessageDescriptor) *fieldHandler {
-	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, typ protowire.Type,
-		tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
+	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, packed bool, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
 		b, n := protowire.ConsumeBytes(data)
 		if n < 0 {
 			return nil, protowire.ParseError(n)
@@ -386,19 +374,166 @@ func makeListMessageHandler(name []byte, num protowire.Number, childDesc protore
 	}}
 }
 
+// mapValueEmitFn emits a single map value. data is the raw wire bytes starting
+// immediately after the field tag (the same slice that would be passed to a
+// protowire.ConsumeXxx call). The concrete function is chosen once at schema
+// construction time based on the value field's kind.
+type mapValueEmitFn func(f *Flattener, data []byte,
+	mapTracker quamina.SegmentsTreeTracker,
+	keyBytes []byte,
+	arrayTrail []quamina.ArrayPos) error
+
 func makeMapHandler(name []byte, mapFd protoreflect.FieldDescriptor) *fieldHandler {
-	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, typ protowire.Type,
-		tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
+	entryDesc := mapFd.Message()
+	keyFd := entryDesc.Fields().ByNumber(1)
+	valEmit := buildMapValueEmitter(entryDesc.Fields().ByNumber(2))
+	return &fieldHandler{name: name, fn: func(f *Flattener, data []byte, packed bool, tracker quamina.SegmentsTreeTracker, arrayTrail []quamina.ArrayPos, arrays *fieldArrays) ([]byte, error) {
 		b, n := protowire.ConsumeBytes(data)
 		if n < 0 {
 			return nil, protowire.ParseError(n)
 		}
 		data = data[n:]
-		if err := f.flattenMapEntry(b, mapFd, tracker, name, arrayTrail); err != nil {
+		if err := f.flattenMapEntry(b, keyFd, valEmit, tracker, name, arrayTrail); err != nil {
 			return nil, err
 		}
 		return data, nil
 	}}
+}
+
+// buildMapValueEmitter selects and returns the right mapValueEmitFn for valFd's kind.
+// Called once at schema construction time.
+func buildMapValueEmitter(valFd protoreflect.FieldDescriptor) mapValueEmitFn {
+	switch valFd.Kind() {
+	case protoreflect.BoolKind:
+		return makeVarintMapValue(appendBool)
+	case protoreflect.EnumKind:
+		return makeVarintMapValue(makeEnumAppendFn(valFd.Enum()))
+	case protoreflect.Sint32Kind:
+		return makeVarintMapValue(appendSint32)
+	case protoreflect.Sint64Kind:
+		return makeVarintMapValue(appendSint64)
+	case protoreflect.Int32Kind:
+		return makeVarintMapValue(appendInt32)
+	case protoreflect.Int64Kind:
+		return makeVarintMapValue(appendInt64)
+	case protoreflect.Uint32Kind, protoreflect.Uint64Kind:
+		return makeVarintMapValue(appendUint64)
+	case protoreflect.FloatKind:
+		return makeFixed32MapValue(appendFloatVal)
+	case protoreflect.Fixed32Kind:
+		return makeFixed32MapValue(appendFixed32Val)
+	case protoreflect.Sfixed32Kind:
+		return makeFixed32MapValue(appendSfixed32)
+	case protoreflect.DoubleKind:
+		return makeFixed64MapValue(appendDoubleVal)
+	case protoreflect.Fixed64Kind:
+		return makeFixed64MapValue(appendFixed64Val)
+	case protoreflect.Sfixed64Kind:
+		return makeFixed64MapValue(appendSfixed64)
+	case protoreflect.StringKind:
+		return emitStringMapValue
+	case protoreflect.BytesKind:
+		return emitBytesMapValue
+	case protoreflect.MessageKind, protoreflect.GroupKind:
+		childDesc := valFd.Message()
+		return func(f *Flattener, data []byte, mapTracker quamina.SegmentsTreeTracker, keyBytes []byte, arrayTrail []quamina.ArrayPos) error {
+			b, n := protowire.ConsumeBytes(data)
+			if n < 0 {
+				return protowire.ParseError(n)
+			}
+			if child, ok := mapTracker.Get(keyBytes); ok {
+				return f.flattenMsg(b, childDesc, child, arrayTrail)
+			}
+			return nil
+		}
+	}
+	return nil
+}
+
+func makeVarintMapValue(af appendVarintFn) mapValueEmitFn {
+	return func(f *Flattener, data []byte, mapTracker quamina.SegmentsTreeTracker, keyBytes []byte, arrayTrail []quamina.ArrayPos) error {
+		v, n := protowire.ConsumeVarint(data)
+		if n < 0 {
+			return protowire.ParseError(n)
+		}
+		if path := mapTracker.PathForSegment(keyBytes); path != nil {
+			start := len(f.valBuf)
+			var isNum bool
+			f.valBuf, isNum = af(f.valBuf, v)
+			f.fields = append(f.fields, quamina.Field{
+				Path: path, Val: f.valBuf[start:], ArrayTrail: arrayTrail, IsNumber: isNum,
+			})
+		}
+		return nil
+	}
+}
+
+func makeFixed32MapValue(af appendFixed32Fn) mapValueEmitFn {
+	return func(f *Flattener, data []byte, mapTracker quamina.SegmentsTreeTracker, keyBytes []byte, arrayTrail []quamina.ArrayPos) error {
+		v, n := protowire.ConsumeFixed32(data)
+		if n < 0 {
+			return protowire.ParseError(n)
+		}
+		if path := mapTracker.PathForSegment(keyBytes); path != nil {
+			start := len(f.valBuf)
+			var isNum bool
+			f.valBuf, isNum = af(f.valBuf, v)
+			f.fields = append(f.fields, quamina.Field{
+				Path: path, Val: f.valBuf[start:], ArrayTrail: arrayTrail, IsNumber: isNum,
+			})
+		}
+		return nil
+	}
+}
+
+func makeFixed64MapValue(af appendFixed64Fn) mapValueEmitFn {
+	return func(f *Flattener, data []byte, mapTracker quamina.SegmentsTreeTracker, keyBytes []byte, arrayTrail []quamina.ArrayPos) error {
+		v, n := protowire.ConsumeFixed64(data)
+		if n < 0 {
+			return protowire.ParseError(n)
+		}
+		if path := mapTracker.PathForSegment(keyBytes); path != nil {
+			start := len(f.valBuf)
+			var isNum bool
+			f.valBuf, isNum = af(f.valBuf, v)
+			f.fields = append(f.fields, quamina.Field{
+				Path: path, Val: f.valBuf[start:], ArrayTrail: arrayTrail, IsNumber: isNum,
+			})
+		}
+		return nil
+	}
+}
+
+func emitStringMapValue(f *Flattener, data []byte, mapTracker quamina.SegmentsTreeTracker, keyBytes []byte, arrayTrail []quamina.ArrayPos) error {
+	b, n := protowire.ConsumeBytes(data)
+	if n < 0 {
+		return protowire.ParseError(n)
+	}
+	if path := mapTracker.PathForSegment(keyBytes); path != nil {
+		start := len(f.valBuf)
+		f.valBuf = append(f.valBuf, '"')
+		f.valBuf = append(f.valBuf, b...)
+		f.valBuf = append(f.valBuf, '"')
+		f.fields = append(f.fields, quamina.Field{
+			Path: path, Val: f.valBuf[start:], ArrayTrail: arrayTrail, IsNumber: false,
+		})
+	}
+	return nil
+}
+
+func emitBytesMapValue(f *Flattener, data []byte, mapTracker quamina.SegmentsTreeTracker, keyBytes []byte, arrayTrail []quamina.ArrayPos) error {
+	b, n := protowire.ConsumeBytes(data)
+	if n < 0 {
+		return protowire.ParseError(n)
+	}
+	if path := mapTracker.PathForSegment(keyBytes); path != nil {
+		start := len(f.valBuf)
+		f.valBuf = base64.StdEncoding.AppendEncode(f.valBuf, b)
+		f.fields = append(f.fields, quamina.Field{
+			Path: path, Val: f.valBuf[start:], ArrayTrail: arrayTrail, IsNumber: false,
+		})
+	}
+	return nil
 }
 
 // decodePackedVarint decodes a packed repeated varint blob, emitting one Field per element.
