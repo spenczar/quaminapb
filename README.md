@@ -36,6 +36,14 @@ Repeated fields and map fields are supported; scalar values are rendered as thei
 
 `Flattener` is not safe for concurrent use. Call `Copy()` to get an independent copy that shares the read-only schema tables but has its own buffers — intended for use with quamina's built-in concurrency support.
 
+## Implementation
+
+Proto wire format encodes fields by number, not by name. To resolve numbers back to names during parsing, `New` walks the descriptor at construction time and builds a per-message-type table mapping each field number to its name (as a pre-allocated `[]byte`) and type metadata. This is done once for the root message and all transitively reachable nested message types, so there's no descriptor traversal at match time.
+
+During `Flatten`, each tag is decoded to a field number, looked up in the table to get the field name, and then checked against quamina's `SegmentsTreeTracker` before any value bytes are parsed. If no active pattern cares about that field, the bytes are skipped entirely. This is why performance scales with the number of fields the patterns actually reference, not the total size of the event.
+
+Internal buffers (`fields`, `valBuf`, `arrayPosBuf`) are reset and reused across `Flatten` calls, giving zero allocations in steady state. `Copy()` creates a new `Flattener` with fresh buffers but shares the immutable schema tables with the original.
+
 ## Performance
 
 Zero allocations in steady state, just like quamina's built-in JSON flattener. Proto binary is at least as fast as JSON for equivalent events, and substantially faster for large events where most fields are irrelevant to the active patterns. See [BENCHMARKS.md](BENCHMARKS.md) for numbers.
