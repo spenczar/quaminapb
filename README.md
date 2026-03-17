@@ -28,7 +28,9 @@ q.AddPattern("high-priority", `{"task": {"priority": [1]}}`)
 matches, err := q.MatchesForEvent(wireBytes)
 ```
 
-Field paths follow the proto field names (not JSON names). Nested messages are descended with the same `{"outer": {"inner": [value]}}` syntax used for JSON quamina patterns. Repeated fields and map fields are supported; scalar values are rendered as their JSON equivalents (strings quoted, numbers bare, booleans `true`/`false`, enums as their string name).
+Field paths follow the proto field names. 
+
+Repeated fields and map fields are supported; scalar values are rendered as their JSON equivalents (strings quoted, numbers bare, booleans `true`/`false`, enums as their string name).
 
 `Flattener` is not safe for concurrent use. Call `Copy()` to get an independent copy that shares the read-only schema tables but has its own buffers — intended for use with quamina's built-in concurrency support.
 
