@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package test;
+
+option go_package = "github.com/spenczar/quamina-protobuf/internal/testproto";
+
+enum TestStatus {
+  UNKNOWN = 0;
+  PENDING = 1;
+  ACTIVE = 2;
+}
+
+message NestedMsg {
+  string value = 1;
+  int32 count = 2;
+}
+
+message TestMsg {
+  int32 id = 1;
+  string name = 2;
+  bool flag = 3;
+  float score = 4;
+  double ratio = 5;
+  bytes data = 6;
+  TestStatus status = 7;
+  NestedMsg nested = 8;
+  repeated int32 tags = 9;
+  repeated NestedMsg items = 10;
+  map<string, string> labels = 11;
+  sint32 signed_val = 12;
+  uint64 big = 13;
+  sfixed32 sf32 = 14;
+  sfixed64 sf64 = 15;
+  fixed32 f32 = 16;
+  fixed64 f64 = 17;
+}

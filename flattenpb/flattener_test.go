@@ -5,19 +5,15 @@ import (
 	"math"
 	"testing"
 
-	quamina "quamina.net/go/quamina/v2"
-	"github.com/spenczar/quamina-protobuf"
+	"github.com/spenczar/quamina-protobuf/flattenpb"
 	"github.com/spenczar/quamina-protobuf/internal/testtracker"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
+	quamina "quamina.net/go/quamina/v2"
 )
-
-// ---------------------------------------------------------------------------
-// Descriptor construction
-// ---------------------------------------------------------------------------
 
 // testDesc is the MessageDescriptor for TestMsg, built programmatically so
 // there is no protoc dependency.
@@ -40,7 +36,7 @@ func buildTestDescriptor() protoreflect.MessageDescriptor {
 	//   }
 
 	opt := func(s string) *string { return proto.String(s) }
-	i32 := func(v int32) *int32  { return proto.Int32(v) }
+	i32 := func(v int32) *int32 { return proto.Int32(v) }
 
 	typeOf := func(t descriptorpb.FieldDescriptorProto_Type) *descriptorpb.FieldDescriptorProto_Type {
 		return &t
@@ -287,10 +283,6 @@ func checkFields(t *testing.T, got []quamina.Field, wantPaths, wantVals []string
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Scalar tests
-// ---------------------------------------------------------------------------
-
 func TestScalars(t *testing.T) {
 	runCases(t, []tc{
 		{
@@ -422,16 +414,12 @@ func TestScalars(t *testing.T) {
 	})
 }
 
-// ---------------------------------------------------------------------------
-// Tracker pruning
-// ---------------------------------------------------------------------------
-
 func TestTrackerPruning(t *testing.T) {
 	runCases(t, []tc{
 		{
 			name:      "field not in tracker is not emitted",
 			data:      func() []byte { b := appendInt32Field(nil, 1, 1); return appendStringField(b, 2, "skip") }(),
-			paths:     []string{"id"},     // only "id" registered
+			paths:     []string{"id"}, // only "id" registered
 			wantPaths: []string{"id"},
 			wantVals:  []string{"1"},
 		},
@@ -444,10 +432,6 @@ func TestTrackerPruning(t *testing.T) {
 		},
 	})
 }
-
-// ---------------------------------------------------------------------------
-// Nested messages
-// ---------------------------------------------------------------------------
 
 func TestNestedMessage(t *testing.T) {
 	inner := nestedMsg("world", 99)
@@ -478,10 +462,6 @@ func TestNestedMessage(t *testing.T) {
 		},
 	})
 }
-
-// ---------------------------------------------------------------------------
-// Repeated scalar fields
-// ---------------------------------------------------------------------------
 
 func TestRepeatedScalar(t *testing.T) {
 	// tags: [10, 20, 30] — packed encoding
@@ -541,10 +521,6 @@ func TestRepeatedScalar(t *testing.T) {
 	})
 }
 
-// ---------------------------------------------------------------------------
-// Repeated message fields
-// ---------------------------------------------------------------------------
-
 func TestRepeatedMessage(t *testing.T) {
 	var msg []byte
 	msg = appendMessageField(msg, 10, nestedMsg("a", 1)) // items[0]
@@ -591,10 +567,6 @@ func TestRepeatedMessage(t *testing.T) {
 	})
 }
 
-// ---------------------------------------------------------------------------
-// Map fields
-// ---------------------------------------------------------------------------
-
 func TestMapField(t *testing.T) {
 	var msg []byte
 	msg = appendMessageField(msg, 11, mapEntry("env", "prod"))
@@ -625,10 +597,6 @@ func TestMapField(t *testing.T) {
 	})
 }
 
-// ---------------------------------------------------------------------------
-// Error cases
-// ---------------------------------------------------------------------------
-
 func TestErrors(t *testing.T) {
 	runCases(t, []tc{
 		{
@@ -645,10 +613,6 @@ func TestErrors(t *testing.T) {
 		},
 	})
 }
-
-// ---------------------------------------------------------------------------
-// Copy
-// ---------------------------------------------------------------------------
 
 func TestCopy(t *testing.T) {
 	orig := flattenpb.New(testDesc)
@@ -669,10 +633,6 @@ func TestCopy(t *testing.T) {
 		t.Errorf("Copy produced different result: %q vs %q", f1[0].Val, f2[0].Val)
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Integration: quamina.WithFlattener
-// ---------------------------------------------------------------------------
 
 func TestWithFlattener(t *testing.T) {
 	fl := flattenpb.New(testDesc)

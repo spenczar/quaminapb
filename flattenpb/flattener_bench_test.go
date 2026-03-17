@@ -3,7 +3,7 @@ package flattenpb_test
 import (
 	"testing"
 
-	"github.com/spenczar/quamina-protobuf"
+	"github.com/spenczar/quamina-protobuf/flattenpb"
 	"github.com/spenczar/quamina-protobuf/internal/testtracker"
 )
 
