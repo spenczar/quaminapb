@@ -12,27 +12,103 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-// msgSchema holds the pre-built lookup tables for a single message type.
+// appendVarintFn formats a varint wire value into buf, returning the extended buf and
+// whether the value should be treated as a JSON number (IsNumber).
+type appendVarintFn func(buf []byte, v uint64) ([]byte, bool)
+
+// appendFixed32Fn formats a fixed32 wire value into buf.
+type appendFixed32Fn func(buf []byte, v uint32) ([]byte, bool)
+
+// appendFixed64Fn formats a fixed64 wire value into buf.
+type appendFixed64Fn func(buf []byte, v uint64) ([]byte, bool)
+
+// Named per-kind append functions, passed to fieldHandler at schema construction time.
+var (
+	appendBool   appendVarintFn = func(buf []byte, v uint64) ([]byte, bool) { return strconv.AppendBool(buf, v != 0), false }
+	appendInt32  appendVarintFn = func(buf []byte, v uint64) ([]byte, bool) { return strconv.AppendInt(buf, int64(int32(v)), 10), true }
+	appendInt64  appendVarintFn = func(buf []byte, v uint64) ([]byte, bool) { return strconv.AppendInt(buf, int64(v), 10), true }
+	appendUint64 appendVarintFn = func(buf []byte, v uint64) ([]byte, bool) { return strconv.AppendUint(buf, v, 10), true }
+	appendSint32 appendVarintFn = func(buf []byte, v uint64) ([]byte, bool) {
+		decoded := protowire.DecodeZigZag(v & 0xFFFFFFFF)
+		return strconv.AppendInt(buf, int64(int32(decoded)), 10), true
+	}
+	appendSint64 appendVarintFn = func(buf []byte, v uint64) ([]byte, bool) {
+		return strconv.AppendInt(buf, protowire.DecodeZigZag(v), 10), true
+	}
+
+	appendFloatVal   appendFixed32Fn = func(buf []byte, v uint32) ([]byte, bool) { return strconv.AppendFloat(buf, float64(math.Float32frombits(v)), 'g', -1, 32), true }
+	appendSfixed32   appendFixed32Fn = func(buf []byte, v uint32) ([]byte, bool) { return strconv.AppendInt(buf, int64(int32(v)), 10), true }
+	appendFixed32Val appendFixed32Fn = func(buf []byte, v uint32) ([]byte, bool) { return strconv.AppendUint(buf, uint64(v), 10), true }
+
+	appendDoubleVal  appendFixed64Fn = func(buf []byte, v uint64) ([]byte, bool) { return strconv.AppendFloat(buf, math.Float64frombits(v), 'g', -1, 64), true }
+	appendSfixed64   appendFixed64Fn = func(buf []byte, v uint64) ([]byte, bool) { return strconv.AppendInt(buf, int64(v), 10), true }
+	appendFixed64Val appendFixed64Fn = func(buf []byte, v uint64) ([]byte, bool) { return strconv.AppendUint(buf, v, 10), true }
+)
+
+// makeEnumAppendFn returns an appendVarintFn that resolves enum value names.
+func makeEnumAppendFn(enumDesc protoreflect.EnumDescriptor) appendVarintFn {
+	return func(buf []byte, v uint64) ([]byte, bool) {
+		ev := enumDesc.Values().ByNumber(protoreflect.EnumNumber(v))
+		if ev == nil {
+			return strconv.AppendInt(buf, int64(v), 10), true
+		}
+		buf = append(buf, '"')
+		buf = append(buf, ev.Name()...)
+		buf = append(buf, '"')
+		return buf, false
+	}
+}
+
+// handlerKind identifies the pre-computed dispatch path for a field.
+type handlerKind uint8
+
+const (
+	hkSingularVarint  handlerKind = iota
+	hkSingularFixed32             // float, fixed32, sfixed32
+	hkSingularFixed64             // double, fixed64, sfixed64
+	hkSingularString
+	hkSingularBytes
+	hkSingularMessage
+	hkMapField
+	hkListVarint
+	hkListFixed32
+	hkListFixed64
+	hkListString
+	hkListBytes
+	hkListMessage
+)
+
+// fieldHandler bundles the pre-computed field name, dispatch kind, and any
+// kind-specific data needed at call time. Built once at schema construction;
+// never mutated after that.
+type fieldHandler struct {
+	name  []byte
+	num   protowire.Number             // needed for list array tracking
+	kind  handlerKind
+	afv   appendVarintFn               // hkSingularVarint, hkListVarint
+	af32  appendFixed32Fn              // hkSingularFixed32, hkListFixed32
+	af64  appendFixed64Fn              // hkSingularFixed64, hkListFixed64
+	child protoreflect.MessageDescriptor // hkSingularMessage, hkListMessage
+	mapFd protoreflect.FieldDescriptor  // hkMapField
+}
+
+// msgSchema holds one handler per field number.
 type msgSchema struct {
-	// byNum maps field number to its descriptor.
-	byNum map[protowire.Number]protoreflect.FieldDescriptor
-	// nameBytes maps field number to the UTF-8 field name as a []byte, cached to
-	// avoid allocating on every Flatten call.
-	nameBytes map[protowire.Number][]byte
+	handlers map[protowire.Number]*fieldHandler
 }
 
 // Flattener implements quamina.Flattener for binary-encoded protobuf messages.
 // Construct one with New; it is not safe for concurrent use across goroutines
 // without calling Copy first.
 type Flattener struct {
-	desc       protoreflect.MessageDescriptor
+	desc protoreflect.MessageDescriptor
 	// allSchemas maps each message type's full name to its pre-built schema,
 	// covering the root message and all transitively reachable nested types.
 	allSchemas map[protoreflect.FullName]*msgSchema
 
 	// reused across Flatten calls to reduce allocations
 	fields      []quamina.Field
-	valBuf      []byte           // backing buffer for all Val slices
+	valBuf      []byte            // backing buffer for all Val slices
 	arrayPosBuf []quamina.ArrayPos // backing buffer for all ArrayTrail slices
 	nextArray   int32
 }
@@ -56,19 +132,146 @@ func buildAllSchemas(desc protoreflect.MessageDescriptor, out map[protoreflect.F
 	}
 	fds := desc.Fields()
 	schema := &msgSchema{
-		byNum:     make(map[protowire.Number]protoreflect.FieldDescriptor, fds.Len()),
-		nameBytes: make(map[protowire.Number][]byte, fds.Len()),
+		handlers: make(map[protowire.Number]*fieldHandler, fds.Len()),
 	}
 	out[desc.FullName()] = schema
 	for i := range fds.Len() {
 		fd := fds.Get(i)
 		num := protowire.Number(fd.Number())
-		schema.byNum[num] = fd
-		schema.nameBytes[num] = []byte(fd.Name())
+		schema.handlers[num] = buildFieldHandler(fd)
 		if fd.Kind() == protoreflect.MessageKind || fd.Kind() == protoreflect.GroupKind {
 			buildAllSchemas(fd.Message(), out)
 		}
 	}
+}
+
+// buildFieldHandler constructs a fieldHandler for fd, selecting the right kind
+// based on fd.Kind() and fd.IsList(). The type switch happens once here at
+// construction time, so the hot loop pays zero branches per field.
+func buildFieldHandler(fd protoreflect.FieldDescriptor) *fieldHandler {
+	name := []byte(fd.Name())
+	num := protowire.Number(fd.Number())
+
+	if fd.IsMap() {
+		return &fieldHandler{name: name, num: num, kind: hkMapField, mapFd: fd}
+	}
+
+	isList := fd.IsList()
+
+	switch fd.Kind() {
+	case protoreflect.BoolKind:
+		k := hkSingularVarint
+		if isList {
+			k = hkListVarint
+		}
+		return &fieldHandler{name: name, num: num, kind: k, afv: appendBool}
+
+	case protoreflect.EnumKind:
+		k := hkSingularVarint
+		if isList {
+			k = hkListVarint
+		}
+		return &fieldHandler{name: name, num: num, kind: k, afv: makeEnumAppendFn(fd.Enum())}
+
+	case protoreflect.Sint32Kind:
+		k := hkSingularVarint
+		if isList {
+			k = hkListVarint
+		}
+		return &fieldHandler{name: name, num: num, kind: k, afv: appendSint32}
+
+	case protoreflect.Sint64Kind:
+		k := hkSingularVarint
+		if isList {
+			k = hkListVarint
+		}
+		return &fieldHandler{name: name, num: num, kind: k, afv: appendSint64}
+
+	case protoreflect.Int32Kind:
+		k := hkSingularVarint
+		if isList {
+			k = hkListVarint
+		}
+		return &fieldHandler{name: name, num: num, kind: k, afv: appendInt32}
+
+	case protoreflect.Int64Kind:
+		k := hkSingularVarint
+		if isList {
+			k = hkListVarint
+		}
+		return &fieldHandler{name: name, num: num, kind: k, afv: appendInt64}
+
+	case protoreflect.Uint32Kind, protoreflect.Uint64Kind:
+		k := hkSingularVarint
+		if isList {
+			k = hkListVarint
+		}
+		return &fieldHandler{name: name, num: num, kind: k, afv: appendUint64}
+
+	case protoreflect.FloatKind:
+		k := hkSingularFixed32
+		if isList {
+			k = hkListFixed32
+		}
+		return &fieldHandler{name: name, num: num, kind: k, af32: appendFloatVal}
+
+	case protoreflect.Fixed32Kind:
+		k := hkSingularFixed32
+		if isList {
+			k = hkListFixed32
+		}
+		return &fieldHandler{name: name, num: num, kind: k, af32: appendFixed32Val}
+
+	case protoreflect.Sfixed32Kind:
+		k := hkSingularFixed32
+		if isList {
+			k = hkListFixed32
+		}
+		return &fieldHandler{name: name, num: num, kind: k, af32: appendSfixed32}
+
+	case protoreflect.DoubleKind:
+		k := hkSingularFixed64
+		if isList {
+			k = hkListFixed64
+		}
+		return &fieldHandler{name: name, num: num, kind: k, af64: appendDoubleVal}
+
+	case protoreflect.Fixed64Kind:
+		k := hkSingularFixed64
+		if isList {
+			k = hkListFixed64
+		}
+		return &fieldHandler{name: name, num: num, kind: k, af64: appendFixed64Val}
+
+	case protoreflect.Sfixed64Kind:
+		k := hkSingularFixed64
+		if isList {
+			k = hkListFixed64
+		}
+		return &fieldHandler{name: name, num: num, kind: k, af64: appendSfixed64}
+
+	case protoreflect.StringKind:
+		k := hkSingularString
+		if isList {
+			k = hkListString
+		}
+		return &fieldHandler{name: name, num: num, kind: k}
+
+	case protoreflect.BytesKind:
+		k := hkSingularBytes
+		if isList {
+			k = hkListBytes
+		}
+		return &fieldHandler{name: name, num: num, kind: k}
+
+	case protoreflect.MessageKind, protoreflect.GroupKind:
+		k := hkSingularMessage
+		if isList {
+			k = hkListMessage
+		}
+		return &fieldHandler{name: name, num: num, kind: k, child: fd.Message()}
+	}
+	return nil
 }
 
 // Copy implements quamina.Flattener. The schema tables (allSchemas) are
@@ -153,9 +356,8 @@ func (f *Flattener) flattenMsg(
 		}
 		data = data[n:]
 
-		fd, ok := schema.byNum[num]
+		h, ok := schema.handlers[num]
 		if !ok {
-			// Unknown field — consume and skip.
 			n = protowire.ConsumeFieldValue(num, typ, data)
 			if n < 0 {
 				return protowire.ParseError(n)
@@ -163,9 +365,7 @@ func (f *Flattener) flattenMsg(
 			data = data[n:]
 			continue
 		}
-
-		name := schema.nameBytes[num]
-		if !tracker.IsSegmentUsed(name) {
+		if !tracker.IsSegmentUsed(h.name) {
 			n = protowire.ConsumeFieldValue(num, typ, data)
 			if n < 0 {
 				return protowire.ParseError(n)
@@ -173,21 +373,8 @@ func (f *Flattener) flattenMsg(
 			data = data[n:]
 			continue
 		}
-
-		// Packed repeated scalars are encoded as a single length-delimited blob containing
-		// multiple concatenated values. Each value within the blob gets its own ArrayPos,
-		// so we defer trail assignment to decodePacked rather than assigning one here.
-		isPackedRepeated := fd.IsList() && typ == protowire.BytesType && isScalarKind(fd.Kind())
-
-		var fieldTrail []quamina.ArrayPos
-		if fd.IsList() && !isPackedRepeated {
-			fieldTrail = arrays.trail(num, arrayTrail, &f.arrayPosBuf, &f.nextArray)
-		} else {
-			fieldTrail = arrayTrail
-		}
-
 		var err error
-		data, err = f.dispatchField(data, fd, num, typ, name, fieldTrail, arrayTrail, &arrays, isPackedRepeated, tracker)
+		data, err = f.dispatchHandler(h, data, typ, tracker, arrayTrail, &arrays)
 		if err != nil {
 			return err
 		}
@@ -195,119 +382,252 @@ func (f *Flattener) flattenMsg(
 	return nil
 }
 
-// dispatchField consumes a single field value from data (immediately following the
-// already-consumed tag), emits any matching quamina.Fields, and returns the remaining data.
-func (f *Flattener) dispatchField(
+// dispatchHandler consumes one field value from data (immediately following the
+// already-consumed tag) and emits any matching quamina.Fields.
+// Using a regular method call (not a func field) lets the compiler see through
+// it for escape analysis, keeping tracker and arrays stack-allocated.
+func (f *Flattener) dispatchHandler(
+	h *fieldHandler,
 	data []byte,
-	fd protoreflect.FieldDescriptor,
-	num protowire.Number,
 	typ protowire.Type,
-	name []byte,
-	fieldTrail, arrayTrail []quamina.ArrayPos,
-	arrays *fieldArrays,
-	isPackedRepeated bool,
 	tracker quamina.SegmentsTreeTracker,
+	arrayTrail []quamina.ArrayPos,
+	arrays *fieldArrays,
 ) ([]byte, error) {
-	switch typ {
-	case protowire.VarintType:
+	switch h.kind {
+	case hkSingularVarint:
 		v, n := protowire.ConsumeVarint(data)
 		if n < 0 {
 			return nil, protowire.ParseError(n)
 		}
 		data = data[n:]
-		if path := tracker.PathForSegment(name); path != nil {
+		if path := tracker.PathForSegment(h.name); path != nil {
 			start := len(f.valBuf)
 			var isNum bool
-			f.valBuf, isNum = appendVarint(f.valBuf, fd, v)
+			f.valBuf, isNum = h.afv(f.valBuf, v)
 			f.fields = append(f.fields, quamina.Field{
-				Path: path, Val: f.valBuf[start:], ArrayTrail: fieldTrail, IsNumber: isNum,
+				Path: path, Val: f.valBuf[start:], ArrayTrail: arrayTrail, IsNumber: isNum,
 			})
 		}
 
-	case protowire.Fixed32Type:
+	case hkSingularFixed32:
 		v, n := protowire.ConsumeFixed32(data)
 		if n < 0 {
 			return nil, protowire.ParseError(n)
 		}
 		data = data[n:]
-		if path := tracker.PathForSegment(name); path != nil {
+		if path := tracker.PathForSegment(h.name); path != nil {
 			start := len(f.valBuf)
 			var isNum bool
-			f.valBuf, isNum = appendFixed32(f.valBuf, fd, v)
+			f.valBuf, isNum = h.af32(f.valBuf, v)
 			f.fields = append(f.fields, quamina.Field{
-				Path: path, Val: f.valBuf[start:], ArrayTrail: fieldTrail, IsNumber: isNum,
+				Path: path, Val: f.valBuf[start:], ArrayTrail: arrayTrail, IsNumber: isNum,
 			})
 		}
 
-	case protowire.Fixed64Type:
+	case hkSingularFixed64:
 		v, n := protowire.ConsumeFixed64(data)
 		if n < 0 {
 			return nil, protowire.ParseError(n)
 		}
 		data = data[n:]
-		if path := tracker.PathForSegment(name); path != nil {
+		if path := tracker.PathForSegment(h.name); path != nil {
 			start := len(f.valBuf)
 			var isNum bool
-			f.valBuf, isNum = appendFixed64(f.valBuf, fd, v)
+			f.valBuf, isNum = h.af64(f.valBuf, v)
 			f.fields = append(f.fields, quamina.Field{
-				Path: path, Val: f.valBuf[start:], ArrayTrail: fieldTrail, IsNumber: isNum,
+				Path: path, Val: f.valBuf[start:], ArrayTrail: arrayTrail, IsNumber: isNum,
 			})
 		}
 
-	case protowire.BytesType:
+	case hkSingularString:
 		b, n := protowire.ConsumeBytes(data)
 		if n < 0 {
 			return nil, protowire.ParseError(n)
 		}
 		data = data[n:]
+		if path := tracker.PathForSegment(h.name); path != nil {
+			start := len(f.valBuf)
+			f.valBuf = append(f.valBuf, '"')
+			f.valBuf = append(f.valBuf, b...)
+			f.valBuf = append(f.valBuf, '"')
+			f.fields = append(f.fields, quamina.Field{
+				Path: path, Val: f.valBuf[start:], ArrayTrail: arrayTrail, IsNumber: false,
+			})
+		}
 
-		switch fd.Kind() {
-		case protoreflect.MessageKind, protoreflect.GroupKind:
-			if fd.IsMap() {
-				if err := f.flattenMapEntry(b, fd, tracker, name, fieldTrail); err != nil {
+	case hkSingularBytes:
+		b, n := protowire.ConsumeBytes(data)
+		if n < 0 {
+			return nil, protowire.ParseError(n)
+		}
+		data = data[n:]
+		if path := tracker.PathForSegment(h.name); path != nil {
+			start := len(f.valBuf)
+			f.valBuf = base64.StdEncoding.AppendEncode(f.valBuf, b)
+			f.fields = append(f.fields, quamina.Field{
+				Path: path, Val: f.valBuf[start:], ArrayTrail: arrayTrail, IsNumber: false,
+			})
+		}
+
+	case hkSingularMessage:
+		b, n := protowire.ConsumeBytes(data)
+		if n < 0 {
+			return nil, protowire.ParseError(n)
+		}
+		data = data[n:]
+		if child, ok := tracker.Get(h.name); ok {
+			if err := f.flattenMsg(b, h.child, child, arrayTrail); err != nil {
+				return nil, err
+			}
+		}
+
+	case hkMapField:
+		b, n := protowire.ConsumeBytes(data)
+		if n < 0 {
+			return nil, protowire.ParseError(n)
+		}
+		data = data[n:]
+		if err := f.flattenMapEntry(b, h.mapFd, tracker, h.name, arrayTrail); err != nil {
+			return nil, err
+		}
+
+	case hkListVarint:
+		if typ == protowire.BytesType {
+			// packed repeated
+			b, n := protowire.ConsumeBytes(data)
+			if n < 0 {
+				return nil, protowire.ParseError(n)
+			}
+			data = data[n:]
+			if path := tracker.PathForSegment(h.name); path != nil {
+				if err := f.decodePackedVarint(b, h.num, path, h.afv, arrays, arrayTrail); err != nil {
 					return nil, err
 				}
-			} else {
-				if child, ok := tracker.Get(name); ok {
-					if err := f.flattenMsg(b, fd.Message(), child, fieldTrail); err != nil {
-						return nil, err
-					}
-				}
 			}
-
-		case protoreflect.StringKind:
-			if path := tracker.PathForSegment(name); path != nil {
+		} else {
+			// non-packed repeated
+			v, n := protowire.ConsumeVarint(data)
+			if n < 0 {
+				return nil, protowire.ParseError(n)
+			}
+			data = data[n:]
+			fieldTrail := arrays.trail(h.num, arrayTrail, &f.arrayPosBuf, &f.nextArray)
+			if path := tracker.PathForSegment(h.name); path != nil {
 				start := len(f.valBuf)
-				f.valBuf = append(f.valBuf, '"')
-				f.valBuf = append(f.valBuf, b...)
-				f.valBuf = append(f.valBuf, '"')
+				var isNum bool
+				f.valBuf, isNum = h.afv(f.valBuf, v)
 				f.fields = append(f.fields, quamina.Field{
-					Path: path, Val: f.valBuf[start:], ArrayTrail: fieldTrail, IsNumber: false,
+					Path: path, Val: f.valBuf[start:], ArrayTrail: fieldTrail, IsNumber: isNum,
 				})
 			}
+		}
 
-		case protoreflect.BytesKind:
-			if path := tracker.PathForSegment(name); path != nil {
+	case hkListFixed32:
+		if typ == protowire.BytesType {
+			b, n := protowire.ConsumeBytes(data)
+			if n < 0 {
+				return nil, protowire.ParseError(n)
+			}
+			data = data[n:]
+			if path := tracker.PathForSegment(h.name); path != nil {
+				if err := f.decodePackedFixed32(b, h.num, path, h.af32, arrays, arrayTrail); err != nil {
+					return nil, err
+				}
+			}
+		} else {
+			v, n := protowire.ConsumeFixed32(data)
+			if n < 0 {
+				return nil, protowire.ParseError(n)
+			}
+			data = data[n:]
+			fieldTrail := arrays.trail(h.num, arrayTrail, &f.arrayPosBuf, &f.nextArray)
+			if path := tracker.PathForSegment(h.name); path != nil {
 				start := len(f.valBuf)
-				f.valBuf = base64.StdEncoding.AppendEncode(f.valBuf, b)
+				var isNum bool
+				f.valBuf, isNum = h.af32(f.valBuf, v)
 				f.fields = append(f.fields, quamina.Field{
-					Path: path, Val: f.valBuf[start:], ArrayTrail: fieldTrail, IsNumber: false,
+					Path: path, Val: f.valBuf[start:], ArrayTrail: fieldTrail, IsNumber: isNum,
 				})
 			}
+		}
 
-		default:
-			// Packed repeated scalar — each element within b is a separate occurrence.
-			if isPackedRepeated {
-				if path := tracker.PathForSegment(name); path != nil {
-					if err := f.decodePacked(b, fd, num, path, arrays, arrayTrail); err != nil {
-						return nil, err
-					}
+	case hkListFixed64:
+		if typ == protowire.BytesType {
+			b, n := protowire.ConsumeBytes(data)
+			if n < 0 {
+				return nil, protowire.ParseError(n)
+			}
+			data = data[n:]
+			if path := tracker.PathForSegment(h.name); path != nil {
+				if err := f.decodePackedFixed64(b, h.num, path, h.af64, arrays, arrayTrail); err != nil {
+					return nil, err
 				}
+			}
+		} else {
+			v, n := protowire.ConsumeFixed64(data)
+			if n < 0 {
+				return nil, protowire.ParseError(n)
+			}
+			data = data[n:]
+			fieldTrail := arrays.trail(h.num, arrayTrail, &f.arrayPosBuf, &f.nextArray)
+			if path := tracker.PathForSegment(h.name); path != nil {
+				start := len(f.valBuf)
+				var isNum bool
+				f.valBuf, isNum = h.af64(f.valBuf, v)
+				f.fields = append(f.fields, quamina.Field{
+					Path: path, Val: f.valBuf[start:], ArrayTrail: fieldTrail, IsNumber: isNum,
+				})
+			}
+		}
+
+	case hkListString:
+		b, n := protowire.ConsumeBytes(data)
+		if n < 0 {
+			return nil, protowire.ParseError(n)
+		}
+		data = data[n:]
+		fieldTrail := arrays.trail(h.num, arrayTrail, &f.arrayPosBuf, &f.nextArray)
+		if path := tracker.PathForSegment(h.name); path != nil {
+			start := len(f.valBuf)
+			f.valBuf = append(f.valBuf, '"')
+			f.valBuf = append(f.valBuf, b...)
+			f.valBuf = append(f.valBuf, '"')
+			f.fields = append(f.fields, quamina.Field{
+				Path: path, Val: f.valBuf[start:], ArrayTrail: fieldTrail, IsNumber: false,
+			})
+		}
+
+	case hkListBytes:
+		b, n := protowire.ConsumeBytes(data)
+		if n < 0 {
+			return nil, protowire.ParseError(n)
+		}
+		data = data[n:]
+		fieldTrail := arrays.trail(h.num, arrayTrail, &f.arrayPosBuf, &f.nextArray)
+		if path := tracker.PathForSegment(h.name); path != nil {
+			start := len(f.valBuf)
+			f.valBuf = base64.StdEncoding.AppendEncode(f.valBuf, b)
+			f.fields = append(f.fields, quamina.Field{
+				Path: path, Val: f.valBuf[start:], ArrayTrail: fieldTrail, IsNumber: false,
+			})
+		}
+
+	case hkListMessage:
+		b, n := protowire.ConsumeBytes(data)
+		if n < 0 {
+			return nil, protowire.ParseError(n)
+		}
+		data = data[n:]
+		fieldTrail := arrays.trail(h.num, arrayTrail, &f.arrayPosBuf, &f.nextArray)
+		if child, ok := tracker.Get(h.name); ok {
+			if err := f.flattenMsg(b, h.child, child, fieldTrail); err != nil {
+				return nil, err
 			}
 		}
 
 	default:
-		n := protowire.ConsumeFieldValue(num, typ, data)
+		n := protowire.ConsumeFieldValue(h.num, typ, data)
 		if n < 0 {
 			return nil, protowire.ParseError(n)
 		}
@@ -512,46 +832,25 @@ func (f *Flattener) emitMapValue(
 	return nil
 }
 
-// decodePacked decodes a packed repeated scalar blob, emitting one Field per element.
-func (f *Flattener) decodePacked(
+// decodePackedVarint decodes a packed repeated varint blob, emitting one Field per element.
+func (f *Flattener) decodePackedVarint(
 	packed []byte,
-	fd protoreflect.FieldDescriptor,
 	num protowire.Number,
 	path []byte,
+	af appendVarintFn,
 	arrays *fieldArrays,
 	arrayTrail []quamina.ArrayPos,
 ) error {
 	aid := arrays.arrayID(num, &f.nextArray)
 	for len(packed) > 0 {
+		v, n := protowire.ConsumeVarint(packed)
+		if n < 0 {
+			return protowire.ParseError(n)
+		}
+		packed = packed[n:]
 		valStart := len(f.valBuf)
 		var isNum bool
-
-		switch fd.Kind() {
-		case protoreflect.FloatKind, protoreflect.Fixed32Kind, protoreflect.Sfixed32Kind:
-			v, n := protowire.ConsumeFixed32(packed)
-			if n < 0 {
-				return protowire.ParseError(n)
-			}
-			packed = packed[n:]
-			f.valBuf, isNum = appendFixed32(f.valBuf, fd, v)
-
-		case protoreflect.DoubleKind, protoreflect.Fixed64Kind, protoreflect.Sfixed64Kind:
-			v, n := protowire.ConsumeFixed64(packed)
-			if n < 0 {
-				return protowire.ParseError(n)
-			}
-			packed = packed[n:]
-			f.valBuf, isNum = appendFixed64(f.valBuf, fd, v)
-
-		default:
-			v, n := protowire.ConsumeVarint(packed)
-			if n < 0 {
-				return protowire.ParseError(n)
-			}
-			packed = packed[n:]
-			f.valBuf, isNum = appendVarint(f.valBuf, fd, v)
-		}
-
+		f.valBuf, isNum = af(f.valBuf, v)
 		pos := arrays.nextPos(num)
 		trailStart := len(f.arrayPosBuf)
 		f.arrayPosBuf = append(f.arrayPosBuf, arrayTrail...)
@@ -566,17 +865,74 @@ func (f *Flattener) decodePacked(
 	return nil
 }
 
-// isScalarKind reports whether a field kind uses a scalar (non-message, non-string, non-bytes) encoding.
-func isScalarKind(k protoreflect.Kind) bool {
-	switch k {
-	case protoreflect.MessageKind, protoreflect.GroupKind,
-		protoreflect.StringKind, protoreflect.BytesKind:
-		return false
+// decodePackedFixed32 decodes a packed repeated fixed32 blob, emitting one Field per element.
+func (f *Flattener) decodePackedFixed32(
+	packed []byte,
+	num protowire.Number,
+	path []byte,
+	af appendFixed32Fn,
+	arrays *fieldArrays,
+	arrayTrail []quamina.ArrayPos,
+) error {
+	aid := arrays.arrayID(num, &f.nextArray)
+	for len(packed) > 0 {
+		v, n := protowire.ConsumeFixed32(packed)
+		if n < 0 {
+			return protowire.ParseError(n)
+		}
+		packed = packed[n:]
+		valStart := len(f.valBuf)
+		var isNum bool
+		f.valBuf, isNum = af(f.valBuf, v)
+		pos := arrays.nextPos(num)
+		trailStart := len(f.arrayPosBuf)
+		f.arrayPosBuf = append(f.arrayPosBuf, arrayTrail...)
+		f.arrayPosBuf = append(f.arrayPosBuf, quamina.ArrayPos{Array: aid, Pos: pos})
+		f.fields = append(f.fields, quamina.Field{
+			Path:       path,
+			Val:        f.valBuf[valStart:],
+			ArrayTrail: f.arrayPosBuf[trailStart:],
+			IsNumber:   isNum,
+		})
 	}
-	return true
+	return nil
+}
+
+// decodePackedFixed64 decodes a packed repeated fixed64 blob, emitting one Field per element.
+func (f *Flattener) decodePackedFixed64(
+	packed []byte,
+	num protowire.Number,
+	path []byte,
+	af appendFixed64Fn,
+	arrays *fieldArrays,
+	arrayTrail []quamina.ArrayPos,
+) error {
+	aid := arrays.arrayID(num, &f.nextArray)
+	for len(packed) > 0 {
+		v, n := protowire.ConsumeFixed64(packed)
+		if n < 0 {
+			return protowire.ParseError(n)
+		}
+		packed = packed[n:]
+		valStart := len(f.valBuf)
+		var isNum bool
+		f.valBuf, isNum = af(f.valBuf, v)
+		pos := arrays.nextPos(num)
+		trailStart := len(f.arrayPosBuf)
+		f.arrayPosBuf = append(f.arrayPosBuf, arrayTrail...)
+		f.arrayPosBuf = append(f.arrayPosBuf, quamina.ArrayPos{Array: aid, Pos: pos})
+		f.fields = append(f.fields, quamina.Field{
+			Path:       path,
+			Val:        f.valBuf[valStart:],
+			ArrayTrail: f.arrayPosBuf[trailStart:],
+			IsNumber:   isNum,
+		})
+	}
+	return nil
 }
 
 // appendVarint appends the quamina Val representation of a varint field to buf.
+// Used by emitMapValue.
 func appendVarint(buf []byte, fd protoreflect.FieldDescriptor, v uint64) ([]byte, bool) {
 	switch fd.Kind() {
 	case protoreflect.BoolKind:
@@ -606,12 +962,12 @@ func appendVarint(buf []byte, fd protoreflect.FieldDescriptor, v uint64) ([]byte
 		return strconv.AppendInt(buf, int64(v), 10), true
 
 	default:
-		// uint32, uint64, and anything else that uses varint
 		return strconv.AppendUint(buf, v, 10), true
 	}
 }
 
 // appendFixed32 appends the quamina Val representation of a fixed32 field to buf.
+// Used by emitMapValue.
 func appendFixed32(buf []byte, fd protoreflect.FieldDescriptor, v uint32) ([]byte, bool) {
 	switch fd.Kind() {
 	case protoreflect.FloatKind:
@@ -624,6 +980,7 @@ func appendFixed32(buf []byte, fd protoreflect.FieldDescriptor, v uint32) ([]byt
 }
 
 // appendFixed64 appends the quamina Val representation of a fixed64 field to buf.
+// Used by emitMapValue.
 func appendFixed64(buf []byte, fd protoreflect.FieldDescriptor, v uint64) ([]byte, bool) {
 	switch fd.Kind() {
 	case protoreflect.DoubleKind:
