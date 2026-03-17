@@ -365,6 +365,762 @@ func (x *TestMsg) GetF64() uint64 {
 	return 0
 }
 
+// CityLots messages mirror the GeoJSON Feature shape used in the citylots
+// benchmark dataset.
+type CityLotProperties struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Mapblklot     string                 `protobuf:"bytes,1,opt,name=mapblklot,proto3" json:"mapblklot,omitempty"`
+	Blklot        string                 `protobuf:"bytes,2,opt,name=blklot,proto3" json:"blklot,omitempty"`
+	BlockNum      string                 `protobuf:"bytes,3,opt,name=block_num,json=blockNum,proto3" json:"block_num,omitempty"`
+	LotNum        string                 `protobuf:"bytes,4,opt,name=lot_num,json=lotNum,proto3" json:"lot_num,omitempty"`
+	FromSt        string                 `protobuf:"bytes,5,opt,name=from_st,json=fromSt,proto3" json:"from_st,omitempty"`
+	ToSt          string                 `protobuf:"bytes,6,opt,name=to_st,json=toSt,proto3" json:"to_st,omitempty"`
+	Street        string                 `protobuf:"bytes,7,opt,name=street,proto3" json:"street,omitempty"`
+	StType        string                 `protobuf:"bytes,8,opt,name=st_type,json=stType,proto3" json:"st_type,omitempty"`
+	OddEven       string                 `protobuf:"bytes,9,opt,name=odd_even,json=oddEven,proto3" json:"odd_even,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CityLotProperties) Reset() {
+	*x = CityLotProperties{}
+	mi := &file_testproto_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CityLotProperties) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CityLotProperties) ProtoMessage() {}
+
+func (x *CityLotProperties) ProtoReflect() protoreflect.Message {
+	mi := &file_testproto_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CityLotProperties.ProtoReflect.Descriptor instead.
+func (*CityLotProperties) Descriptor() ([]byte, []int) {
+	return file_testproto_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *CityLotProperties) GetMapblklot() string {
+	if x != nil {
+		return x.Mapblklot
+	}
+	return ""
+}
+
+func (x *CityLotProperties) GetBlklot() string {
+	if x != nil {
+		return x.Blklot
+	}
+	return ""
+}
+
+func (x *CityLotProperties) GetBlockNum() string {
+	if x != nil {
+		return x.BlockNum
+	}
+	return ""
+}
+
+func (x *CityLotProperties) GetLotNum() string {
+	if x != nil {
+		return x.LotNum
+	}
+	return ""
+}
+
+func (x *CityLotProperties) GetFromSt() string {
+	if x != nil {
+		return x.FromSt
+	}
+	return ""
+}
+
+func (x *CityLotProperties) GetToSt() string {
+	if x != nil {
+		return x.ToSt
+	}
+	return ""
+}
+
+func (x *CityLotProperties) GetStreet() string {
+	if x != nil {
+		return x.Street
+	}
+	return ""
+}
+
+func (x *CityLotProperties) GetStType() string {
+	if x != nil {
+		return x.StType
+	}
+	return ""
+}
+
+func (x *CityLotProperties) GetOddEven() string {
+	if x != nil {
+		return x.OddEven
+	}
+	return ""
+}
+
+type CityLotCoord struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Lon           float64                `protobuf:"fixed64,1,opt,name=lon,proto3" json:"lon,omitempty"`
+	Lat           float64                `protobuf:"fixed64,2,opt,name=lat,proto3" json:"lat,omitempty"`
+	Elev          float64                `protobuf:"fixed64,3,opt,name=elev,proto3" json:"elev,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CityLotCoord) Reset() {
+	*x = CityLotCoord{}
+	mi := &file_testproto_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CityLotCoord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CityLotCoord) ProtoMessage() {}
+
+func (x *CityLotCoord) ProtoReflect() protoreflect.Message {
+	mi := &file_testproto_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CityLotCoord.ProtoReflect.Descriptor instead.
+func (*CityLotCoord) Descriptor() ([]byte, []int) {
+	return file_testproto_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *CityLotCoord) GetLon() float64 {
+	if x != nil {
+		return x.Lon
+	}
+	return 0
+}
+
+func (x *CityLotCoord) GetLat() float64 {
+	if x != nil {
+		return x.Lat
+	}
+	return 0
+}
+
+func (x *CityLotCoord) GetElev() float64 {
+	if x != nil {
+		return x.Elev
+	}
+	return 0
+}
+
+type CityLotRing struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Points        []*CityLotCoord        `protobuf:"bytes,1,rep,name=points,proto3" json:"points,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CityLotRing) Reset() {
+	*x = CityLotRing{}
+	mi := &file_testproto_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CityLotRing) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CityLotRing) ProtoMessage() {}
+
+func (x *CityLotRing) ProtoReflect() protoreflect.Message {
+	mi := &file_testproto_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CityLotRing.ProtoReflect.Descriptor instead.
+func (*CityLotRing) Descriptor() ([]byte, []int) {
+	return file_testproto_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *CityLotRing) GetPoints() []*CityLotCoord {
+	if x != nil {
+		return x.Points
+	}
+	return nil
+}
+
+type CityLotGeometry struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Type          string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
+	Rings         []*CityLotRing         `protobuf:"bytes,2,rep,name=rings,proto3" json:"rings,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CityLotGeometry) Reset() {
+	*x = CityLotGeometry{}
+	mi := &file_testproto_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CityLotGeometry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CityLotGeometry) ProtoMessage() {}
+
+func (x *CityLotGeometry) ProtoReflect() protoreflect.Message {
+	mi := &file_testproto_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CityLotGeometry.ProtoReflect.Descriptor instead.
+func (*CityLotGeometry) Descriptor() ([]byte, []int) {
+	return file_testproto_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *CityLotGeometry) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *CityLotGeometry) GetRings() []*CityLotRing {
+	if x != nil {
+		return x.Rings
+	}
+	return nil
+}
+
+type CityLotFeature struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Type          string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
+	Properties    *CityLotProperties     `protobuf:"bytes,2,opt,name=properties,proto3" json:"properties,omitempty"`
+	Geometry      *CityLotGeometry       `protobuf:"bytes,3,opt,name=geometry,proto3" json:"geometry,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CityLotFeature) Reset() {
+	*x = CityLotFeature{}
+	mi := &file_testproto_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CityLotFeature) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CityLotFeature) ProtoMessage() {}
+
+func (x *CityLotFeature) ProtoReflect() protoreflect.Message {
+	mi := &file_testproto_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CityLotFeature.ProtoReflect.Descriptor instead.
+func (*CityLotFeature) Descriptor() ([]byte, []int) {
+	return file_testproto_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *CityLotFeature) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *CityLotFeature) GetProperties() *CityLotProperties {
+	if x != nil {
+		return x.Properties
+	}
+	return nil
+}
+
+func (x *CityLotFeature) GetGeometry() *CityLotGeometry {
+	if x != nil {
+		return x.Geometry
+	}
+	return nil
+}
+
+// Status messages mirror the Twitter-like event shape used in quamina's own
+// status.json benchmark dataset.
+type StatusContext struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        int64                  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	FriendsCount  int64                  `protobuf:"varint,2,opt,name=friends_count,json=friendsCount,proto3" json:"friends_count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StatusContext) Reset() {
+	*x = StatusContext{}
+	mi := &file_testproto_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StatusContext) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StatusContext) ProtoMessage() {}
+
+func (x *StatusContext) ProtoReflect() protoreflect.Message {
+	mi := &file_testproto_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StatusContext.ProtoReflect.Descriptor instead.
+func (*StatusContext) Descriptor() ([]byte, []int) {
+	return file_testproto_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *StatusContext) GetUserId() int64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+func (x *StatusContext) GetFriendsCount() int64 {
+	if x != nil {
+		return x.FriendsCount
+	}
+	return 0
+}
+
+type StatusUser struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Id             int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	IdStr          string                 `protobuf:"bytes,2,opt,name=id_str,json=idStr,proto3" json:"id_str,omitempty"`
+	Name           string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	ScreenName     string                 `protobuf:"bytes,4,opt,name=screen_name,json=screenName,proto3" json:"screen_name,omitempty"`
+	Location       string                 `protobuf:"bytes,5,opt,name=location,proto3" json:"location,omitempty"`
+	Description    string                 `protobuf:"bytes,6,opt,name=description,proto3" json:"description,omitempty"`
+	FollowersCount int64                  `protobuf:"varint,7,opt,name=followers_count,json=followersCount,proto3" json:"followers_count,omitempty"`
+	FriendsCount   int64                  `protobuf:"varint,8,opt,name=friends_count,json=friendsCount,proto3" json:"friends_count,omitempty"`
+	ListedCount    int64                  `protobuf:"varint,9,opt,name=listed_count,json=listedCount,proto3" json:"listed_count,omitempty"`
+	StatusesCount  int64                  `protobuf:"varint,10,opt,name=statuses_count,json=statusesCount,proto3" json:"statuses_count,omitempty"`
+	CreatedAt      string                 `protobuf:"bytes,11,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	Verified       bool                   `protobuf:"varint,12,opt,name=verified,proto3" json:"verified,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *StatusUser) Reset() {
+	*x = StatusUser{}
+	mi := &file_testproto_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StatusUser) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StatusUser) ProtoMessage() {}
+
+func (x *StatusUser) ProtoReflect() protoreflect.Message {
+	mi := &file_testproto_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StatusUser.ProtoReflect.Descriptor instead.
+func (*StatusUser) Descriptor() ([]byte, []int) {
+	return file_testproto_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *StatusUser) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *StatusUser) GetIdStr() string {
+	if x != nil {
+		return x.IdStr
+	}
+	return ""
+}
+
+func (x *StatusUser) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *StatusUser) GetScreenName() string {
+	if x != nil {
+		return x.ScreenName
+	}
+	return ""
+}
+
+func (x *StatusUser) GetLocation() string {
+	if x != nil {
+		return x.Location
+	}
+	return ""
+}
+
+func (x *StatusUser) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *StatusUser) GetFollowersCount() int64 {
+	if x != nil {
+		return x.FollowersCount
+	}
+	return 0
+}
+
+func (x *StatusUser) GetFriendsCount() int64 {
+	if x != nil {
+		return x.FriendsCount
+	}
+	return 0
+}
+
+func (x *StatusUser) GetListedCount() int64 {
+	if x != nil {
+		return x.ListedCount
+	}
+	return 0
+}
+
+func (x *StatusUser) GetStatusesCount() int64 {
+	if x != nil {
+		return x.StatusesCount
+	}
+	return 0
+}
+
+func (x *StatusUser) GetCreatedAt() string {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return ""
+}
+
+func (x *StatusUser) GetVerified() bool {
+	if x != nil {
+		return x.Verified
+	}
+	return false
+}
+
+type StatusPayloadMetadata struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ResultType      string                 `protobuf:"bytes,1,opt,name=result_type,json=resultType,proto3" json:"result_type,omitempty"`
+	IsoLanguageCode string                 `protobuf:"bytes,2,opt,name=iso_language_code,json=isoLanguageCode,proto3" json:"iso_language_code,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *StatusPayloadMetadata) Reset() {
+	*x = StatusPayloadMetadata{}
+	mi := &file_testproto_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StatusPayloadMetadata) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StatusPayloadMetadata) ProtoMessage() {}
+
+func (x *StatusPayloadMetadata) ProtoReflect() protoreflect.Message {
+	mi := &file_testproto_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StatusPayloadMetadata.ProtoReflect.Descriptor instead.
+func (*StatusPayloadMetadata) Descriptor() ([]byte, []int) {
+	return file_testproto_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *StatusPayloadMetadata) GetResultType() string {
+	if x != nil {
+		return x.ResultType
+	}
+	return ""
+}
+
+func (x *StatusPayloadMetadata) GetIsoLanguageCode() string {
+	if x != nil {
+		return x.IsoLanguageCode
+	}
+	return ""
+}
+
+type StatusPayload struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Metadata      *StatusPayloadMetadata `protobuf:"bytes,1,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	CreatedAt     string                 `protobuf:"bytes,2,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	Id            int64                  `protobuf:"varint,3,opt,name=id,proto3" json:"id,omitempty"`
+	IdStr         string                 `protobuf:"bytes,4,opt,name=id_str,json=idStr,proto3" json:"id_str,omitempty"`
+	Text          string                 `protobuf:"bytes,5,opt,name=text,proto3" json:"text,omitempty"`
+	Source        string                 `protobuf:"bytes,6,opt,name=source,proto3" json:"source,omitempty"`
+	Truncated     bool                   `protobuf:"varint,7,opt,name=truncated,proto3" json:"truncated,omitempty"`
+	User          *StatusUser            `protobuf:"bytes,8,opt,name=user,proto3" json:"user,omitempty"`
+	RetweetCount  int64                  `protobuf:"varint,9,opt,name=retweet_count,json=retweetCount,proto3" json:"retweet_count,omitempty"`
+	FavoriteCount int64                  `protobuf:"varint,10,opt,name=favorite_count,json=favoriteCount,proto3" json:"favorite_count,omitempty"`
+	Favorited     bool                   `protobuf:"varint,11,opt,name=favorited,proto3" json:"favorited,omitempty"`
+	Retweeted     bool                   `protobuf:"varint,12,opt,name=retweeted,proto3" json:"retweeted,omitempty"`
+	LangValue     string                 `protobuf:"bytes,13,opt,name=lang_value,json=langValue,proto3" json:"lang_value,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StatusPayload) Reset() {
+	*x = StatusPayload{}
+	mi := &file_testproto_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StatusPayload) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StatusPayload) ProtoMessage() {}
+
+func (x *StatusPayload) ProtoReflect() protoreflect.Message {
+	mi := &file_testproto_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StatusPayload.ProtoReflect.Descriptor instead.
+func (*StatusPayload) Descriptor() ([]byte, []int) {
+	return file_testproto_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *StatusPayload) GetMetadata() *StatusPayloadMetadata {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+func (x *StatusPayload) GetCreatedAt() string {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return ""
+}
+
+func (x *StatusPayload) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *StatusPayload) GetIdStr() string {
+	if x != nil {
+		return x.IdStr
+	}
+	return ""
+}
+
+func (x *StatusPayload) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *StatusPayload) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *StatusPayload) GetTruncated() bool {
+	if x != nil {
+		return x.Truncated
+	}
+	return false
+}
+
+func (x *StatusPayload) GetUser() *StatusUser {
+	if x != nil {
+		return x.User
+	}
+	return nil
+}
+
+func (x *StatusPayload) GetRetweetCount() int64 {
+	if x != nil {
+		return x.RetweetCount
+	}
+	return 0
+}
+
+func (x *StatusPayload) GetFavoriteCount() int64 {
+	if x != nil {
+		return x.FavoriteCount
+	}
+	return 0
+}
+
+func (x *StatusPayload) GetFavorited() bool {
+	if x != nil {
+		return x.Favorited
+	}
+	return false
+}
+
+func (x *StatusPayload) GetRetweeted() bool {
+	if x != nil {
+		return x.Retweeted
+	}
+	return false
+}
+
+func (x *StatusPayload) GetLangValue() string {
+	if x != nil {
+		return x.LangValue
+	}
+	return ""
+}
+
+type StatusEvent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Context       *StatusContext         `protobuf:"bytes,1,opt,name=context,proto3" json:"context,omitempty"`
+	Payload       *StatusPayload         `protobuf:"bytes,2,opt,name=payload,proto3" json:"payload,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StatusEvent) Reset() {
+	*x = StatusEvent{}
+	mi := &file_testproto_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StatusEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StatusEvent) ProtoMessage() {}
+
+func (x *StatusEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_testproto_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StatusEvent.ProtoReflect.Descriptor instead.
+func (*StatusEvent) Descriptor() ([]byte, []int) {
+	return file_testproto_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *StatusEvent) GetContext() *StatusContext {
+	if x != nil {
+		return x.Context
+	}
+	return nil
+}
+
+func (x *StatusEvent) GetPayload() *StatusPayload {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
 var File_testproto_proto protoreflect.FileDescriptor
 
 const file_testproto_proto_rawDesc = "" +
@@ -405,7 +1161,76 @@ const file_testproto_proto_rawDesc = "" +
 	"\x03f64\x18\x11 \x01(\x06R\x03f64\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01*2\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xf9\x01\n" +
+	"\x11CityLotProperties\x12\x1c\n" +
+	"\tmapblklot\x18\x01 \x01(\tR\tmapblklot\x12\x16\n" +
+	"\x06blklot\x18\x02 \x01(\tR\x06blklot\x12\x1b\n" +
+	"\tblock_num\x18\x03 \x01(\tR\bblockNum\x12\x17\n" +
+	"\alot_num\x18\x04 \x01(\tR\x06lotNum\x12\x17\n" +
+	"\afrom_st\x18\x05 \x01(\tR\x06fromSt\x12\x13\n" +
+	"\x05to_st\x18\x06 \x01(\tR\x04toSt\x12\x16\n" +
+	"\x06street\x18\a \x01(\tR\x06street\x12\x17\n" +
+	"\ast_type\x18\b \x01(\tR\x06stType\x12\x19\n" +
+	"\bodd_even\x18\t \x01(\tR\aoddEven\"F\n" +
+	"\fCityLotCoord\x12\x10\n" +
+	"\x03lon\x18\x01 \x01(\x01R\x03lon\x12\x10\n" +
+	"\x03lat\x18\x02 \x01(\x01R\x03lat\x12\x12\n" +
+	"\x04elev\x18\x03 \x01(\x01R\x04elev\"9\n" +
+	"\vCityLotRing\x12*\n" +
+	"\x06points\x18\x01 \x03(\v2\x12.test.CityLotCoordR\x06points\"N\n" +
+	"\x0fCityLotGeometry\x12\x12\n" +
+	"\x04type\x18\x01 \x01(\tR\x04type\x12'\n" +
+	"\x05rings\x18\x02 \x03(\v2\x11.test.CityLotRingR\x05rings\"\x90\x01\n" +
+	"\x0eCityLotFeature\x12\x12\n" +
+	"\x04type\x18\x01 \x01(\tR\x04type\x127\n" +
+	"\n" +
+	"properties\x18\x02 \x01(\v2\x17.test.CityLotPropertiesR\n" +
+	"properties\x121\n" +
+	"\bgeometry\x18\x03 \x01(\v2\x15.test.CityLotGeometryR\bgeometry\"M\n" +
+	"\rStatusContext\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12#\n" +
+	"\rfriends_count\x18\x02 \x01(\x03R\ffriendsCount\"\xf9\x02\n" +
+	"\n" +
+	"StatusUser\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x15\n" +
+	"\x06id_str\x18\x02 \x01(\tR\x05idStr\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12\x1f\n" +
+	"\vscreen_name\x18\x04 \x01(\tR\n" +
+	"screenName\x12\x1a\n" +
+	"\blocation\x18\x05 \x01(\tR\blocation\x12 \n" +
+	"\vdescription\x18\x06 \x01(\tR\vdescription\x12'\n" +
+	"\x0ffollowers_count\x18\a \x01(\x03R\x0efollowersCount\x12#\n" +
+	"\rfriends_count\x18\b \x01(\x03R\ffriendsCount\x12!\n" +
+	"\flisted_count\x18\t \x01(\x03R\vlistedCount\x12%\n" +
+	"\x0estatuses_count\x18\n" +
+	" \x01(\x03R\rstatusesCount\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\v \x01(\tR\tcreatedAt\x12\x1a\n" +
+	"\bverified\x18\f \x01(\bR\bverified\"d\n" +
+	"\x15StatusPayloadMetadata\x12\x1f\n" +
+	"\vresult_type\x18\x01 \x01(\tR\n" +
+	"resultType\x12*\n" +
+	"\x11iso_language_code\x18\x02 \x01(\tR\x0fisoLanguageCode\"\xa5\x03\n" +
+	"\rStatusPayload\x127\n" +
+	"\bmetadata\x18\x01 \x01(\v2\x1b.test.StatusPayloadMetadataR\bmetadata\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x02 \x01(\tR\tcreatedAt\x12\x0e\n" +
+	"\x02id\x18\x03 \x01(\x03R\x02id\x12\x15\n" +
+	"\x06id_str\x18\x04 \x01(\tR\x05idStr\x12\x12\n" +
+	"\x04text\x18\x05 \x01(\tR\x04text\x12\x16\n" +
+	"\x06source\x18\x06 \x01(\tR\x06source\x12\x1c\n" +
+	"\ttruncated\x18\a \x01(\bR\ttruncated\x12$\n" +
+	"\x04user\x18\b \x01(\v2\x10.test.StatusUserR\x04user\x12#\n" +
+	"\rretweet_count\x18\t \x01(\x03R\fretweetCount\x12%\n" +
+	"\x0efavorite_count\x18\n" +
+	" \x01(\x03R\rfavoriteCount\x12\x1c\n" +
+	"\tfavorited\x18\v \x01(\bR\tfavorited\x12\x1c\n" +
+	"\tretweeted\x18\f \x01(\bR\tretweeted\x12\x1d\n" +
+	"\n" +
+	"lang_value\x18\r \x01(\tR\tlangValue\"k\n" +
+	"\vStatusEvent\x12-\n" +
+	"\acontext\x18\x01 \x01(\v2\x13.test.StatusContextR\acontext\x12-\n" +
+	"\apayload\x18\x02 \x01(\v2\x13.test.StatusPayloadR\apayload*2\n" +
 	"\n" +
 	"TestStatus\x12\v\n" +
 	"\aUNKNOWN\x10\x00\x12\v\n" +
@@ -426,28 +1251,46 @@ func file_testproto_proto_rawDescGZIP() []byte {
 }
 
 var file_testproto_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_testproto_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_testproto_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_testproto_proto_goTypes = []any{
-	(TestStatus)(0),   // 0: test.TestStatus
-	(*DeepMsg)(nil),   // 1: test.DeepMsg
-	(*NestedMsg)(nil), // 2: test.NestedMsg
-	(*TestMsg)(nil),   // 3: test.TestMsg
-	nil,               // 4: test.NestedMsg.AttrsEntry
-	nil,               // 5: test.TestMsg.LabelsEntry
+	(TestStatus)(0),               // 0: test.TestStatus
+	(*DeepMsg)(nil),               // 1: test.DeepMsg
+	(*NestedMsg)(nil),             // 2: test.NestedMsg
+	(*TestMsg)(nil),               // 3: test.TestMsg
+	(*CityLotProperties)(nil),     // 4: test.CityLotProperties
+	(*CityLotCoord)(nil),          // 5: test.CityLotCoord
+	(*CityLotRing)(nil),           // 6: test.CityLotRing
+	(*CityLotGeometry)(nil),       // 7: test.CityLotGeometry
+	(*CityLotFeature)(nil),        // 8: test.CityLotFeature
+	(*StatusContext)(nil),         // 9: test.StatusContext
+	(*StatusUser)(nil),            // 10: test.StatusUser
+	(*StatusPayloadMetadata)(nil), // 11: test.StatusPayloadMetadata
+	(*StatusPayload)(nil),         // 12: test.StatusPayload
+	(*StatusEvent)(nil),           // 13: test.StatusEvent
+	nil,                           // 14: test.NestedMsg.AttrsEntry
+	nil,                           // 15: test.TestMsg.LabelsEntry
 }
 var file_testproto_proto_depIdxs = []int32{
-	1, // 0: test.NestedMsg.deep:type_name -> test.DeepMsg
-	4, // 1: test.NestedMsg.attrs:type_name -> test.NestedMsg.AttrsEntry
-	1, // 2: test.NestedMsg.parts:type_name -> test.DeepMsg
-	0, // 3: test.TestMsg.status:type_name -> test.TestStatus
-	2, // 4: test.TestMsg.nested:type_name -> test.NestedMsg
-	2, // 5: test.TestMsg.items:type_name -> test.NestedMsg
-	5, // 6: test.TestMsg.labels:type_name -> test.TestMsg.LabelsEntry
-	7, // [7:7] is the sub-list for method output_type
-	7, // [7:7] is the sub-list for method input_type
-	7, // [7:7] is the sub-list for extension type_name
-	7, // [7:7] is the sub-list for extension extendee
-	0, // [0:7] is the sub-list for field type_name
+	1,  // 0: test.NestedMsg.deep:type_name -> test.DeepMsg
+	14, // 1: test.NestedMsg.attrs:type_name -> test.NestedMsg.AttrsEntry
+	1,  // 2: test.NestedMsg.parts:type_name -> test.DeepMsg
+	0,  // 3: test.TestMsg.status:type_name -> test.TestStatus
+	2,  // 4: test.TestMsg.nested:type_name -> test.NestedMsg
+	2,  // 5: test.TestMsg.items:type_name -> test.NestedMsg
+	15, // 6: test.TestMsg.labels:type_name -> test.TestMsg.LabelsEntry
+	5,  // 7: test.CityLotRing.points:type_name -> test.CityLotCoord
+	6,  // 8: test.CityLotGeometry.rings:type_name -> test.CityLotRing
+	4,  // 9: test.CityLotFeature.properties:type_name -> test.CityLotProperties
+	7,  // 10: test.CityLotFeature.geometry:type_name -> test.CityLotGeometry
+	11, // 11: test.StatusPayload.metadata:type_name -> test.StatusPayloadMetadata
+	10, // 12: test.StatusPayload.user:type_name -> test.StatusUser
+	9,  // 13: test.StatusEvent.context:type_name -> test.StatusContext
+	12, // 14: test.StatusEvent.payload:type_name -> test.StatusPayload
+	15, // [15:15] is the sub-list for method output_type
+	15, // [15:15] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_testproto_proto_init() }
@@ -461,7 +1304,7 @@ func file_testproto_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_testproto_proto_rawDesc), len(file_testproto_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   5,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

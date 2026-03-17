@@ -44,3 +44,65 @@ message TestMsg {
   fixed32 f32 = 16;
   fixed64 f64 = 17;
 }
+
+// CityLots messages mirror the GeoJSON Feature shape used in the citylots
+// benchmark dataset.
+message CityLotProperties {
+  string mapblklot = 1; string blklot    = 2; string block_num = 3;
+  string lot_num   = 4; string from_st   = 5; string to_st     = 6;
+  string street    = 7; string st_type   = 8; string odd_even  = 9;
+}
+message CityLotCoord {
+  double lon  = 1;
+  double lat  = 2;
+  double elev = 3;
+}
+message CityLotRing {
+  repeated CityLotCoord points = 1;
+}
+message CityLotGeometry {
+  string            type  = 1;
+  repeated CityLotRing rings = 2;
+}
+message CityLotFeature {
+  string            type       = 1;
+  CityLotProperties properties = 2;
+  CityLotGeometry   geometry   = 3;
+}
+
+// Status messages mirror the Twitter-like event shape used in quamina's own
+// status.json benchmark dataset.
+message StatusContext {
+  int64 user_id       = 1;
+  int64 friends_count = 2;
+}
+message StatusUser {
+  int64  id              = 1; string id_str         = 2;
+  string name            = 3; string screen_name    = 4;
+  string location        = 5; string description    = 6;
+  int64  followers_count = 7; int64  friends_count  = 8;
+  int64  listed_count    = 9; int64  statuses_count = 10;
+  string created_at      = 11; bool   verified      = 12;
+}
+message StatusPayloadMetadata {
+  string result_type = 1; string iso_language_code = 2;
+}
+message StatusPayload {
+  StatusPayloadMetadata metadata       = 1;
+  string                created_at     = 2;
+  int64                 id             = 3;
+  string                id_str         = 4;
+  string                text           = 5;
+  string                source         = 6;
+  bool                  truncated      = 7;
+  StatusUser            user           = 8;
+  int64                 retweet_count  = 9;
+  int64                 favorite_count = 10;
+  bool                  favorited      = 11;
+  bool                  retweeted      = 12;
+  string                lang_value     = 13;
+}
+message StatusEvent {
+  StatusContext context = 1;
+  StatusPayload payload = 2;
+}

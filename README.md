@@ -36,20 +36,7 @@ Repeated fields and map fields are supported; scalar values are rendered as thei
 
 ## Performance
 
-Benchmarks run on an AMD Ryzen 5 7600X against a moderately complex message with a mix of scalar, nested, and repeated fields (~15 fields total across the wire encoding):
-
-| Benchmark | ns/op | B/op | allocs/op |
-|---|---|---|---|
-| FewFields (tracker watches 2 paths) | ~550 | 24 | 1 |
-| ManyFields (tracker watches all 13 paths) | ~1840 | 280 | 5 |
-
-The `FewFields` case reflects typical quamina usage where patterns only care about a small subset of fields — the flattener skips unused paths entirely.
-
-Run benchmarks yourself:
-
-```
-go test ./... -bench=. -benchmem
-```
+Zero allocations in steady state, just like quamina's built-in JSON flattener. Proto binary is at least as fast as JSON for equivalent events, and substantially faster for large events where most fields are irrelevant to the active patterns. See [BENCHMARKS.md](BENCHMARKS.md) for numbers.
 
 ## Development
 
