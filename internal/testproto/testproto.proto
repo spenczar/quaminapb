@@ -19,6 +19,10 @@ message NestedMsg {
   int32 count = 2;
   DeepMsg deep = 3;
   map<string, string> attrs = 4;
+  // parts intentionally uses field number 10, the same as TestMsg.items, to
+  // exercise that the flattener's per-call fieldArrays scoping correctly
+  // isolates array ID allocation at each nesting level.
+  repeated DeepMsg parts = 10;
 }
 
 message TestMsg {

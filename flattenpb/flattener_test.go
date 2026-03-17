@@ -400,6 +400,141 @@ func TestRepeatedMessage(t *testing.T) {
 	})
 }
 
+// TestRepeatedMsgInSingularNested verifies that a repeated message field
+// inside a singular nested message gets correct ArrayTrail positions.
+// NestedMsg.parts uses field number 10, same as TestMsg.items, so this also
+// confirms that per-call fieldArrays scoping prevents ID collision.
+func TestRepeatedMsgInSingularNested(t *testing.T) {
+	msg := mustMarshal(&testproto.TestMsg{
+		Nested: &testproto.NestedMsg{
+			Parts: []*testproto.DeepMsg{
+				{Leaf: "x"},
+				{Leaf: "y"},
+			},
+		},
+	})
+
+	runCases(t, []tc{
+		{
+			name:      "repeated msg inside singular nested",
+			data:      msg,
+			paths:     []string{"nested\nparts\nleaf"},
+			wantPaths: []string{"nested\nparts\nleaf", "nested\nparts\nleaf"},
+			wantVals:  []string{`"x"`, `"y"`},
+		},
+	})
+
+	t.Run("ArrayTrail positions", func(t *testing.T) {
+		fl := flattenpb.New(testDesc)
+		tr := testtracker.New("nested\nparts\nleaf")
+		fields, err := fl.Flatten(msg, tr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(fields) != 2 {
+			t.Fatalf("want 2 fields, got %d", len(fields))
+		}
+		// Each leaf is one level deep in a repeated field; trail length must be 1.
+		for i, f := range fields {
+			if len(f.ArrayTrail) != 1 {
+				t.Errorf("[%d] ArrayTrail len %d, want 1", i, len(f.ArrayTrail))
+			}
+		}
+		aid := fields[0].ArrayTrail[0].Array
+		if fields[1].ArrayTrail[0].Array != aid {
+			t.Errorf("array IDs differ across parts elements: %d vs %d", aid, fields[1].ArrayTrail[0].Array)
+		}
+		if fields[0].ArrayTrail[0].Pos != 0 {
+			t.Errorf("parts[0] Pos=%d, want 0", fields[0].ArrayTrail[0].Pos)
+		}
+		if fields[1].ArrayTrail[0].Pos != 1 {
+			t.Errorf("parts[1] Pos=%d, want 1", fields[1].ArrayTrail[0].Pos)
+		}
+	})
+}
+
+// TestDoublyNestedRepeated tests items[*].parts[*].leaf where both fields use
+// field number 10 in their respective message types. The critical invariant is
+// that items[0].parts and items[1].parts receive *different* inner array IDs,
+// because each items[i] invocation creates a fresh fieldArrays scope.
+func TestDoublyNestedRepeated(t *testing.T) {
+	msg := mustMarshal(&testproto.TestMsg{
+		Items: []*testproto.NestedMsg{
+			{Parts: []*testproto.DeepMsg{{Leaf: "a"}, {Leaf: "b"}}},
+			{Parts: []*testproto.DeepMsg{{Leaf: "c"}}},
+		},
+	})
+
+	runCases(t, []tc{
+		{
+			name:  "doubly nested repeated leaf values",
+			data:  msg,
+			paths: []string{"items\nparts\nleaf"},
+			wantPaths: []string{
+				"items\nparts\nleaf",
+				"items\nparts\nleaf",
+				"items\nparts\nleaf",
+			},
+			wantVals: []string{`"a"`, `"b"`, `"c"`},
+		},
+	})
+
+	t.Run("ArrayTrail structure", func(t *testing.T) {
+		fl := flattenpb.New(testDesc)
+		tr := testtracker.New("items\nparts\nleaf")
+		fields, err := fl.Flatten(msg, tr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// 3 leaves total: items[0] contributes 2, items[1] contributes 1.
+		if len(fields) != 3 {
+			t.Fatalf("want 3 fields, got %d", len(fields))
+		}
+		for i, f := range fields {
+			// Each leaf is two levels deep in repeated fields.
+			if len(f.ArrayTrail) != 2 {
+				t.Errorf("[%d] ArrayTrail len %d, want 2: %v", i, len(f.ArrayTrail), f.ArrayTrail)
+			}
+		}
+
+		outerID := fields[0].ArrayTrail[0].Array
+		innerID0 := fields[0].ArrayTrail[1].Array // items[0].parts array ID
+		innerID1 := fields[2].ArrayTrail[1].Array // items[1].parts array ID
+
+		// All three fields share the same outer (items) array ID.
+		for i, f := range fields {
+			if f.ArrayTrail[0].Array != outerID {
+				t.Errorf("[%d] outer array ID %d, want %d", i, f.ArrayTrail[0].Array, outerID)
+			}
+		}
+
+		// items[0].parts and items[1].parts must have distinct inner array IDs
+		// because fieldArrays is scoped per flattenMsg call.
+		if innerID0 == innerID1 {
+			t.Errorf("items[0].parts and items[1].parts share array ID %d; expected independent IDs", innerID0)
+		}
+
+		// items[0] fields: outer Pos=0, inner Pos=0 and 1.
+		if fields[0].ArrayTrail[0].Pos != 0 || fields[1].ArrayTrail[0].Pos != 0 {
+			t.Errorf("items[0] leaves should have outer Pos=0: %v %v", fields[0].ArrayTrail, fields[1].ArrayTrail)
+		}
+		if fields[0].ArrayTrail[1].Pos != 0 {
+			t.Errorf("items[0].parts[0] inner Pos=%d, want 0", fields[0].ArrayTrail[1].Pos)
+		}
+		if fields[1].ArrayTrail[1].Pos != 1 {
+			t.Errorf("items[0].parts[1] inner Pos=%d, want 1", fields[1].ArrayTrail[1].Pos)
+		}
+
+		// items[1] field: outer Pos=1, inner Pos=0.
+		if fields[2].ArrayTrail[0].Pos != 1 {
+			t.Errorf("items[1] leaf outer Pos=%d, want 1", fields[2].ArrayTrail[0].Pos)
+		}
+		if fields[2].ArrayTrail[1].Pos != 0 {
+			t.Errorf("items[1].parts[0] inner Pos=%d, want 0", fields[2].ArrayTrail[1].Pos)
+		}
+	})
+}
+
 func TestMapField(t *testing.T) {
 	msg := mustMarshal(&testproto.TestMsg{
 		Labels: map[string]string{"env": "prod", "region": "us-east"},
@@ -464,6 +599,47 @@ func TestCopy(t *testing.T) {
 	}
 	if !bytes.Equal(f1[0].Val, f2[0].Val) {
 		t.Errorf("Copy produced different result: %q vs %q", f1[0].Val, f2[0].Val)
+	}
+}
+
+// TestCopyIndependence verifies that concurrent use of orig and copy does not
+// corrupt either's output. It alternates Flatten calls with different messages
+// so that any shared mutable state (fields, valBuf, arrayPosBuf) would cause
+// one result to overwrite the other.
+func TestCopyIndependence(t *testing.T) {
+	orig := flattenpb.New(testDesc)
+	cpy := orig.Copy()
+
+	msgA := mustMarshal(&testproto.TestMsg{Id: 1, Name: "alice"})
+	msgB := mustMarshal(&testproto.TestMsg{Id: 2, Name: "bob"})
+	trA := testtracker.New("id", "name")
+	trB := testtracker.New("id", "name")
+
+	// Flatten with orig, then copy, then orig again — if buffers are shared the
+	// second orig call would see stale or overwritten data.
+	fa1, err := orig.Flatten(msgA, trA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Save the values before the next call can clobber them (they alias valBuf).
+	id1 := string(fa1[0].Val)
+	name1 := string(fa1[1].Val)
+
+	_, err = cpy.Flatten(msgB, trB)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fa2, err := orig.Flatten(msgA, trA)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if string(fa2[0].Val) != id1 {
+		t.Errorf("orig id corrupted after copy use: got %q, want %q", fa2[0].Val, id1)
+	}
+	if string(fa2[1].Val) != name1 {
+		t.Errorf("orig name corrupted after copy use: got %q, want %q", fa2[1].Val, name1)
 	}
 }
 

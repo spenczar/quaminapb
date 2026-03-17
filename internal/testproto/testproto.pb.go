@@ -115,11 +115,15 @@ func (x *DeepMsg) GetLeaf() string {
 }
 
 type NestedMsg struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Value         string                 `protobuf:"bytes,1,opt,name=value,proto3" json:"value,omitempty"`
-	Count         int32                  `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
-	Deep          *DeepMsg               `protobuf:"bytes,3,opt,name=deep,proto3" json:"deep,omitempty"`
-	Attrs         map[string]string      `protobuf:"bytes,4,rep,name=attrs,proto3" json:"attrs,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Value string                 `protobuf:"bytes,1,opt,name=value,proto3" json:"value,omitempty"`
+	Count int32                  `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
+	Deep  *DeepMsg               `protobuf:"bytes,3,opt,name=deep,proto3" json:"deep,omitempty"`
+	Attrs map[string]string      `protobuf:"bytes,4,rep,name=attrs,proto3" json:"attrs,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// parts intentionally uses field number 10, the same as TestMsg.items, to
+	// exercise that the flattener's per-call fieldArrays scoping correctly
+	// isolates array ID allocation at each nesting level.
+	Parts         []*DeepMsg `protobuf:"bytes,10,rep,name=parts,proto3" json:"parts,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -178,6 +182,13 @@ func (x *NestedMsg) GetDeep() *DeepMsg {
 func (x *NestedMsg) GetAttrs() map[string]string {
 	if x != nil {
 		return x.Attrs
+	}
+	return nil
+}
+
+func (x *NestedMsg) GetParts() []*DeepMsg {
+	if x != nil {
+		return x.Parts
 	}
 	return nil
 }
@@ -360,12 +371,14 @@ const file_testproto_proto_rawDesc = "" +
 	"\n" +
 	"\x0ftestproto.proto\x12\x04test\"\x1d\n" +
 	"\aDeepMsg\x12\x12\n" +
-	"\x04leaf\x18\x01 \x01(\tR\x04leaf\"\xc6\x01\n" +
+	"\x04leaf\x18\x01 \x01(\tR\x04leaf\"\xeb\x01\n" +
 	"\tNestedMsg\x12\x14\n" +
 	"\x05value\x18\x01 \x01(\tR\x05value\x12\x14\n" +
 	"\x05count\x18\x02 \x01(\x05R\x05count\x12!\n" +
 	"\x04deep\x18\x03 \x01(\v2\r.test.DeepMsgR\x04deep\x120\n" +
-	"\x05attrs\x18\x04 \x03(\v2\x1a.test.NestedMsg.AttrsEntryR\x05attrs\x1a8\n" +
+	"\x05attrs\x18\x04 \x03(\v2\x1a.test.NestedMsg.AttrsEntryR\x05attrs\x12#\n" +
+	"\x05parts\x18\n" +
+	" \x03(\v2\r.test.DeepMsgR\x05parts\x1a8\n" +
 	"\n" +
 	"AttrsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
@@ -425,15 +438,16 @@ var file_testproto_proto_goTypes = []any{
 var file_testproto_proto_depIdxs = []int32{
 	1, // 0: test.NestedMsg.deep:type_name -> test.DeepMsg
 	4, // 1: test.NestedMsg.attrs:type_name -> test.NestedMsg.AttrsEntry
-	0, // 2: test.TestMsg.status:type_name -> test.TestStatus
-	2, // 3: test.TestMsg.nested:type_name -> test.NestedMsg
-	2, // 4: test.TestMsg.items:type_name -> test.NestedMsg
-	5, // 5: test.TestMsg.labels:type_name -> test.TestMsg.LabelsEntry
-	6, // [6:6] is the sub-list for method output_type
-	6, // [6:6] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	1, // 2: test.NestedMsg.parts:type_name -> test.DeepMsg
+	0, // 3: test.TestMsg.status:type_name -> test.TestStatus
+	2, // 4: test.TestMsg.nested:type_name -> test.NestedMsg
+	2, // 5: test.TestMsg.items:type_name -> test.NestedMsg
+	5, // 6: test.TestMsg.labels:type_name -> test.TestMsg.LabelsEntry
+	7, // [7:7] is the sub-list for method output_type
+	7, // [7:7] is the sub-list for method input_type
+	7, // [7:7] is the sub-list for extension type_name
+	7, // [7:7] is the sub-list for extension extendee
+	0, // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_testproto_proto_init() }

@@ -71,9 +71,15 @@ func buildAllSchemas(desc protoreflect.MessageDescriptor, out map[protoreflect.F
 	}
 }
 
-// Copy implements quamina.Flattener.
+// Copy implements quamina.Flattener. The schema tables (allSchemas) are
+// immutable after construction and are shared with the copy; only the
+// per-call mutable buffers get fresh allocations.
 func (f *Flattener) Copy() quamina.Flattener {
-	return New(f.desc)
+	return &Flattener{
+		desc:       f.desc,
+		allSchemas: f.allSchemas,
+		fields:     make([]quamina.Field, 0, cap(f.fields)),
+	}
 }
 
 // Flatten implements quamina.Flattener.
